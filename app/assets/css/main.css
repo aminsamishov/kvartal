@@ -1,0 +1,179 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* поверхности */
+  --bg: #F2F1EF;
+  --panel: #FFFFFF;
+  --soft: #F7F6F4;
+  --ink: #1A171D;
+  --muted: #6D6772;
+  --line: #E5E1DE;
+
+  /* акцент бренда — унаследован от прототипа AVENUE 88 */
+  --plum: #6E4453;
+  --plum-d: #57333F;
+  --plum-bg: #F4EBEF;
+  --rose: #A77886;
+
+  /* статусы */
+  --ok: #2F7D5C;      --ok-bg: #E4F2EA;
+  --warn: #B8780E;    --warn-bg: #FBF1DE;
+  --bad: #B93A2F;     --bad-bg: #F9E4E1;
+  --info: #3A6EA5;    --info-bg: #E8F0F8;
+
+  /* статусы помещений (шахматка) */
+  --free: #FFFFFF;
+  --reserve: #B8780E; --reserve-bg: #FBF1DE;
+  --inst: #A77886;    --inst-bg: #F4EBEF;
+  --sold: #34495A;    --sold-bg: #E7EBEE;
+
+  /* заливка ячеек шахматки — намеренно НЕ зависит от темы (в отличие от --reserve/--inst/--sold
+     выше, которые в тёмной теме светлеют для использования как акцентный текст на тёмном фоне).
+     Ячейке нужна одна и та же насыщенная заливка в обеих темах, чтобы белый текст поверх
+     оставался читаемым всегда — иначе в светлой теме получается почти невидимый текст. */
+  --board-reserve: #C9821A; --board-reserve-ink: #2B1B04;
+  --board-inst: #8C5566;    --board-inst-ink: #FFFFFF;
+  --board-sold: #34495A;    --board-sold-ink: #FFFFFF;
+  --board-ok: #2F7D5C;      --board-ok-ink: #FFFFFF;
+  --board-warn: #B8780E;    --board-warn-ink: #FFFFFF;
+  --board-bad: #B93A2F;     --board-bad-ink: #FFFFFF;
+
+  /* та же логика для сплошных кнопок/бейджей с белым текстом вне шахматки —
+     кнопка "Опубликовать" не должна светлеть в тёмной теме до нечитаемости */
+  --fill-plum: #6E4453; --fill-plum-d: #57333F;
+  --fill-ok: #2F7D5C;   --fill-ok-d: #24634A;
+  --fill-bad: #B93A2F;  --fill-bad-d: #9C3026;
+
+
+  /* палитра графиков. Отдельная от --board-* (те под сплошную заливку с текстом
+     поверх): у марок графика текста сверху нет, поэтому здесь важна не читаемость
+     надписи, а различимость соседних сегментов. Значения подобраны валидатором
+     палитры: соседние пары проходят CVD ΔE>=8, порог нормального зрения ΔE>=15 и
+     контраст >=3:1 к поверхности. Порядок легенды фиксирован:
+     продано -> рассрочка -> бронь -> свободно -> закрыто. */
+  --c-sold: #34495A;
+  --c-inst: #8C5566;
+  --c-reserve: #C9821A;
+  --c-free: #8A8290;
+  --c-closed: #3E3945;
+
+  /* порядковая (ordinal) шкала воронки: один тон, монотонная светлота.
+     Этап тем темнее, чем ближе к сделке. */
+  --c-step-1: #CDA6B5;
+  --c-step-2: #B88A9C;
+  --c-step-3: #A06E83;
+  --c-step-4: #87536A;
+  --c-step-5: #6E4453;
+
+  /* сетка графиков — на один шаг от поверхности, ~1.3:1, намеренно незаметна */
+  --c-grid: var(--line);
+  --c-accent: #6E4453;
+
+  /* боковая панель */
+  --side: #18161B;
+  --side-panel: #201D23;
+  --side-ink: #A39CA8;
+  --side-line: #2B272F;
+
+  --r: 7px;
+  --r-card: 10px;
+
+  --shadow-card: 0 1px 1px rgba(26,20,23,.03), 0 4px 14px -8px rgba(26,20,23,.07), 0 1px 0 rgba(26,20,23,.02);
+  --shadow-card-hover: 0 2px 4px rgba(26,20,23,.04), 0 14px 28px -12px rgba(26,20,23,.13);
+  --shadow-pop: 0 4px 10px rgba(26,20,23,.06), 0 22px 46px -18px rgba(26,20,23,.24);
+
+  --f-ui: 'Onest', 'Segoe UI', system-ui, -apple-system, Roboto, sans-serif;
+  --f-disp: 'Unbounded', 'Onest', 'Segoe UI', system-ui, sans-serif;
+
+  color-scheme: light;
+}
+
+:root[data-theme='dark'] {
+  --bg: #121114; --panel: #1B191E; --soft: #221F25; --ink: #EEEAF0; --muted: #9D95A2; --line: #2E2A32;
+  --plum: #C48CA0; --plum-d: #D6A2B4; --plum-bg: #2F2229; --rose: #C48CA0;
+  --ok: #5DBB8E; --ok-bg: #1B3127; --warn: #E3A84C; --warn-bg: #382D1A; --bad: #EE7466; --bad-bg: #3B2220;
+  --info: #7FA8D6; --info-bg: #1C2A38;
+  --free: #1B191E; --reserve: #E3A84C; --reserve-bg: #382D1A; --inst: #C48CA0; --inst-bg: #2F2229; --sold: #7C93A3; --sold-bg: #222831;
+  --side: #0E0D10; --side-panel: #17151A; --side-ink: #8B8390; --side-line: #262229;
+  --c-sold: #567085; --c-inst: #C48CA0; --c-reserve: #E3A84C; --c-free: #9A92A5; --c-closed: #6B6476;
+  --c-step-1: #754655; --c-step-2: #8E5D6D; --c-step-3: #A87786; --c-step-4: #C2929F; --c-step-5: #D8AEBE;
+  --c-accent: #C48CA0;
+  --shadow-card: 0 0 0 1px rgba(255,255,255,.02) inset, 0 6px 16px -8px rgba(0,0,0,.55);
+  --shadow-card-hover: 0 0 0 1px rgba(255,255,255,.03) inset, 0 16px 32px -14px rgba(0,0,0,.6);
+  --shadow-pop: 0 0 0 1px rgba(255,255,255,.03) inset, 0 24px 52px -18px rgba(0,0,0,.7);
+  color-scheme: dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --bg: #121114; --panel: #1B191E; --soft: #221F25; --ink: #EEEAF0; --muted: #9D95A2; --line: #2E2A32;
+    --plum: #C48CA0; --plum-d: #D6A2B4; --plum-bg: #2F2229; --rose: #C48CA0;
+    --ok: #5DBB8E; --ok-bg: #1B3127; --warn: #E3A84C; --warn-bg: #382D1A; --bad: #EE7466; --bad-bg: #3B2220;
+    --info: #7FA8D6; --info-bg: #1C2A38;
+    --free: #1B191E; --reserve: #E3A84C; --reserve-bg: #382D1A; --inst: #C48CA0; --inst-bg: #2F2229; --sold: #7C93A3; --sold-bg: #222831;
+    --side: #0E0D10; --side-panel: #17151A; --side-ink: #8B8390; --side-line: #262229;
+  --c-sold: #567085; --c-inst: #C48CA0; --c-reserve: #E3A84C; --c-free: #9A92A5; --c-closed: #6B6476;
+  --c-step-1: #754655; --c-step-2: #8E5D6D; --c-step-3: #A87786; --c-step-4: #C2929F; --c-step-5: #D8AEBE;
+  --c-accent: #C48CA0;
+    --shadow-card: 0 0 0 1px rgba(255,255,255,.02) inset, 0 6px 16px -8px rgba(0,0,0,.55);
+    --shadow-card-hover: 0 0 0 1px rgba(255,255,255,.03) inset, 0 16px 32px -14px rgba(0,0,0,.6);
+    --shadow-pop: 0 0 0 1px rgba(255,255,255,.03) inset, 0 24px 52px -18px rgba(0,0,0,.7);
+    color-scheme: dark;
+  }
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--f-ui);
+  font-size: 14.5px;
+  line-height: 1.5;
+  font-feature-settings: 'tnum' 1;
+  -webkit-font-smoothing: antialiased;
+}
+::selection { background: var(--plum); color: #fff; }
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--line); border-radius: 99px; border: 2px solid var(--bg); }
+.side-scroll::-webkit-scrollbar-thumb { background: var(--side-line); border-color: var(--side); }
+
+.font-disp { font-family: var(--f-disp); letter-spacing: -0.01em; }
+
+/* фокус-кольцо, консистентное с брендом */
+.focus-ring:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--panel), 0 0 0 4px var(--plum);
+}
+
+/* карточные тени "на подъёме" — используем экономно, только для оверлеев */
+.shadow-panel { box-shadow: var(--shadow-pop); }
+
+.tabular { font-variant-numeric: tabular-nums; }
+
+/* таблицы данных, единый стиль по всему приложению */
+.data-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+.data-table th {
+  text-align: left; font-weight: 600; font-size: 11.5px; letter-spacing: .02em; text-transform: uppercase;
+  color: var(--muted); padding: 9px 12px; border-bottom: 1px solid var(--line); white-space: nowrap;
+  background: var(--panel); position: sticky; top: 0; z-index: 1;
+}
+.data-table td {
+  padding: 11px 12px; border-bottom: 1px solid var(--line); vertical-align: middle;
+  /* числа и суммы не переносим: колонка должна уезжать в горизонтальный скролл,
+     а не ломать "2.3 млн $" на две строки. Текстовые ячейки гасят это через
+     .truncate/min-w-0 там, где перенос действительно нужен. */
+  white-space: nowrap;
+}
+.data-table tbody tr { transition: background .1s; }
+.data-table tbody tr:hover { background: var(--soft); }
+.data-table tbody tr:last-child td { border-bottom: none; }
+
+/* карточный переход между разделами */
+.page-enter-active, .page-leave-active { transition: opacity .14s ease; }
+.page-enter-from, .page-leave-to { opacity: 0; }
