@@ -44,8 +44,13 @@ onMounted(async () => {
     <div class="flex min-h-screen flex-col transition-[padding] duration-150" :class="ui.sidebarCollapsed ? 'lg:pl-[76px]' : 'lg:pl-[248px]'">
       <AppTopbar />
       <main class="flex-1 px-4 py-5 lg:px-7 lg:py-6">
+        <!--
+          Без mode="out-in": он ждёт конца ухода скелетона, а переходы Vue
+          продвигаются через requestAnimationFrame. В фоновой вкладке rAF
+          заморожен, уход не завершается — и страница залипала на скелетоне,
+          пока вкладку не откроют. Теперь содержимое появляется сразу.
+        -->
         <Transition
-          mode="out-in"
           enter-active-class="transition-opacity duration-200" leave-active-class="transition-opacity duration-100"
           enter-from-class="opacity-0" leave-to-class="opacity-0"
         >
