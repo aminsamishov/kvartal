@@ -5,6 +5,7 @@ import { area as fmtArea, fmtDate, fmtPhone, money } from '~/utils/format'
 import { fileToObjectUrl, pickFiles } from '~/composables/useFileUpload'
 import { explicationTotals, roomColor, roomLabel } from '~/utils/explication'
 import { zoneCentroid, zonePointsAttr } from '~/utils/zones'
+import { bestPromoForUnit } from '~/utils/board'
 import type { ZoneOption } from '~/components/units/ImageZoneEditor.vue'
 
 const props = defineProps<{ unitId: string | null }>()
@@ -22,6 +23,8 @@ const unit = computed(() => (props.unitId ? unitsStore.unit(props.unitId) : unde
 const project = computed(() => (unit.value ? unitsStore.project(unit.value.projectId) : undefined))
 const building = computed(() => (unit.value ? unitsStore.building(unit.value.buildingId) : undefined))
 const reservation = computed(() => (unit.value ? salesStore.reservationForUnit(unit.value.id) : undefined))
+const dealsStore = useDealsStore()
+const contract = computed(() => (unit.value?.contractId ? dealsStore.contract(unit.value.contractId) : undefined))
 const client = computed(() => (reservation.value ? salesStore.client(reservation.value.clientId) : undefined))
 const preset = computed(() => (unit.value?.layoutPresetId ? building.value?.unitTypePresets.find((p) => p.id === unit.value!.layoutPresetId) : undefined))
 const displayImage = computed(() => unit.value?.imageUrl || preset.value?.imageUrl || null)
@@ -54,24 +57,30 @@ const canEdit = computed(() => can('unit.editStatus')
   && unit.value?.status !== 'sold' && unit.value?.status !== 'installment')
 /** Цена — прайс, а не карточка: менеджер её видит, но не правит. */
 const canPrice = computed(() => canEdit.value && can('unit.editPrice'))
+const promo = computed(() => (unit.value ? bestPromoForUnit(unit.value, settingsStore.promotions) : null))
 
-type UnitTab = 'params' | 'deal' | 'explication' | 'plan' | 'history'
-const tab = ref<UnitTab>('params')
-// у занятого помещения первым делом смотрят сделку, у свободного — параметры
+type UnitTab = 'overview' | 'deal' | 'price' | 'docs' | 'activity'
+const tab = ref<UnitTab>('overview')
+// у занятого помещения первым делом смотрят сделку, у свободного — обзор
 watch(() => props.unitId, () => {
-  tab.value = unit.value?.contractId || reservation.value ? 'deal' : 'params'
+  tab.value = unit.value?.contractId || reservation.value ? 'deal' : 'overview'
 })
 
 const priceChanges = computed(() => (props.unitId
   ? unitsStore.historyFor(props.unitId).filter((h) => h.kind === 'price').length
   : 0))
+const activityCount = computed(() => (props.unitId ? unitsStore.historyFor(props.unitId).length : 0))
+const docsCount = computed(() => {
+  const clientId = contract.value?.clientId ?? reservation.value?.clientId
+  return clientId ? salesStore.documentsForClient(clientId).length : 0
+})
 
 const tabs = computed(() => [
-  { value: 'params', label: 'Параметры', icon: 'ph:sliders-horizontal' },
+  { value: 'overview', label: 'Обзор', icon: 'ph:sliders-horizontal' },
   { value: 'deal', label: 'Сделка', icon: 'ph:handshake' },
-  { value: 'explication', label: 'Экспликация', icon: 'ph:list-numbers', count: explication.value.rooms.length || undefined },
-  { value: 'plan', label: 'На плане', icon: 'ph:polygon' },
-  { value: 'history', label: 'История цены', icon: 'ph:chart-line-up', count: priceChanges.value || undefined },
+  { value: 'price', label: 'Цена', icon: 'ph:tag', count: priceChanges.value || undefined },
+  { value: 'docs', label: 'Документы', icon: 'ph:files', count: docsCount.value || undefined },
+  { value: 'activity', label: 'Активность', icon: 'ph:clock-counter-clockwise', count: activityCount.value || undefined },
 ])
 
 const finishingOptions = [
@@ -240,8 +249,8 @@ function setStatus(status: UnitStatus) {
 
       <Tabs :model-value="tab" class="mt-4" :tabs="tabs" @update:model-value="tab = $event as UnitTab" />
 
-      <!-- параметры -->
-      <div v-if="tab === 'params'" class="pt-4">
+      <!-- обзор: что это за помещение -->
+      <div v-if="tab === 'overview'" class="pt-4">
         <div class="grid grid-cols-2 gap-3 rounded-xl2 border border-line bg-panel p-3.5">
           <label class="flex flex-col gap-1 text-[11px] font-medium uppercase tracking-[0.03em] text-muted">
             Номер
@@ -280,6 +289,63 @@ function setStatus(status: UnitStatus) {
           </div>
         </dl>
         <p v-if="!canEdit" class="mt-2.5 flex items-center gap-1.5 text-[11.5px] text-muted"><Icon name="ph:lock-simple" size="13" /> Проданные помещения не редактируются — правки через договор</p>
+
+        <!-- экспликация -->
+        <section class="mt-5">
+          <div class="mb-2.5 flex flex-wrap items-center justify-between gap-2">
+            <h4 class="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted">Экспликация</h4>
+            <div class="flex items-center gap-2">
+              <StatusTag :tone="explication.own ? 'plum' : 'neutral'" size="sm" :icon="explication.own ? 'ph:pencil-simple' : 'ph:link'">
+                {{ explication.own ? 'Своя' : explication.presetName ? `Из планировки «${explication.presetName}»` : 'Не заполнена' }}
+              </StatusTag>
+              <button v-if="explication.own && explication.presetName" class="text-[11.5px] font-medium text-muted hover:text-plum" @click="resetExplication">
+                Вернуть из планировки
+              </button>
+            </div>
+          </div>
+          <ExplicationEditor
+            :rooms="explication.rooms" :declared-area="unit.area" :readonly="!canEdit"
+            @update:rooms="onExplicationUpdate" @template="fillExplicationTemplate" @apply-area="applyExplicationArea"
+          />
+          <div v-if="roomPlan" class="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-xl2 border border-line bg-soft px-3 py-2.5">
+            <div class="min-w-0 text-[12.5px]">
+              <p class="font-semibold text-ink">Комнаты на планировке</p>
+              <p class="text-muted">
+                {{ roomPlan.zones.length ? `Размечено ${roomPlan.zones.length} из ${explication.rooms.length}` : 'Не размечено' }}
+                <template v-if="!roomPlan.own"> · из планировки «{{ roomPlan.presetName }}»</template>
+              </p>
+            </div>
+            <AppButton v-if="roomPlan.own" size="sm" variant="primary" icon="ph:polygon" @click="openRoomMarking">Разметить</AppButton>
+            <AppButton
+              v-else-if="roomPlan.presetId" size="sm" icon="ph:arrow-up-right"
+              @click="navigateTo(`/buildings/${unit!.buildingId}?tab=presets`)"
+            >К планировке</AppButton>
+          </div>
+        </section>
+
+        <!-- место на плане этажа -->
+        <section class="mt-5">
+          <h4 class="mb-2.5 text-[11px] font-semibold uppercase tracking-[0.05em] text-muted">На плане {{ unit.floor }} этажа</h4>
+          <template v-if="floorPlan?.imageUrl && planZones.length">
+            <ImageZoneEditor
+              readonly :image-url="floorPlan.imageUrl" :zones="planZones" :options="planOptions" @pick="onPlanPick"
+            />
+            <p class="mt-1.5 flex items-start gap-1.5 text-[11.5px] text-muted">
+              <Icon name="ph:cursor-click" size="13" class="mt-0.5 shrink-0" />
+              <span v-if="isMarked">Клик по соседней области откроет её карточку.</span>
+              <span v-else>Это помещение ещё не размечено на плане этажа.</span>
+            </p>
+          </template>
+          <EmptyState
+            v-else compact icon="ph:polygon"
+            :title="floorPlan?.imageUrl ? 'Этаж не размечен' : 'План этажа не загружен'"
+            text="Разметка делается в карточке дома, раздел «Планировки этажей»"
+          >
+            <template #action>
+              <AppButton size="sm" icon="ph:arrow-right" @click="navigateTo(`/buildings/${unit!.buildingId}?tab=floorplans`)">К планам этажей</AppButton>
+            </template>
+          </EmptyState>
+        </section>
       </div>
 
       <!-- сделка: клиент, договор, деньги и график без ухода со страницы -->
@@ -287,73 +353,65 @@ function setStatus(status: UnitStatus) {
         <UnitDealCard :unit="unit" />
       </div>
 
-      <!-- история цены -->
-      <div v-else-if="tab === 'history'" class="pt-4">
-        <UnitPriceHistory :unit="unit" />
-      </div>
-
-      <!-- экспликация -->
-      <div v-else-if="tab === 'explication'" class="pt-4">
-        <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <StatusTag :tone="explication.own ? 'plum' : 'neutral'" size="sm" :icon="explication.own ? 'ph:pencil-simple' : 'ph:link'">
-            {{ explication.own ? 'Своя экспликация' : explication.presetName ? `Из планировки «${explication.presetName}»` : 'Не заполнена' }}
-          </StatusTag>
-          <button v-if="explication.own && explication.presetName" class="text-[11.5px] font-medium text-muted hover:text-plum" @click="resetExplication">
-            Вернуть из планировки
-          </button>
-        </div>
-        <ExplicationEditor
-          :rooms="explication.rooms" :declared-area="unit.area" :readonly="!canEdit"
-          @update:rooms="onExplicationUpdate" @template="fillExplicationTemplate" @apply-area="applyExplicationArea"
-        />
-        <!-- разметка комнат на планировке -->
-        <div v-if="roomPlan" class="mt-3.5 flex flex-wrap items-center justify-between gap-2 rounded-xl2 border border-line bg-soft px-3 py-2.5">
-          <div class="min-w-0 text-[12.5px]">
-            <p class="font-semibold text-ink">Комнаты на планировке</p>
-            <p class="text-muted">
-              {{ roomPlan.zones.length ? `Размечено ${roomPlan.zones.length} из ${explication.rooms.length}` : 'Не размечено' }}
-              <template v-if="!roomPlan.own"> · разметка из планировки «{{ roomPlan.presetName }}»</template>
+      <!-- цена: сколько стоит сегодня и почему -->
+      <div v-else-if="tab === 'price'" class="pt-4">
+        <div class="grid grid-cols-2 gap-px overflow-hidden rounded-xl2 border border-line bg-line">
+          <div class="bg-panel px-3 py-2.5">
+            <p class="text-[11px] uppercase tracking-[0.04em] text-muted">Цена</p>
+            <p class="tabular mt-0.5 text-[19px] font-semibold tracking-[-0.02em] text-ink">{{ money(unit.price, project?.currency) }}</p>
+          </div>
+          <div class="bg-panel px-3 py-2.5">
+            <p class="text-[11px] uppercase tracking-[0.04em] text-muted">За м²</p>
+            <p class="tabular mt-0.5 text-[19px] font-semibold tracking-[-0.02em] text-ink">
+              {{ money(Math.round(unit.price / (unit.area || 1)), project?.currency) }}
             </p>
           </div>
-          <AppButton v-if="roomPlan.own" size="sm" variant="primary" icon="ph:polygon" @click="openRoomMarking">Разметить</AppButton>
-          <AppButton
-            v-else-if="roomPlan.presetId" size="sm" icon="ph:arrow-up-right"
-            @click="navigateTo(`/buildings/${unit!.buildingId}?tab=presets`)"
-          >К планировке</AppButton>
+          <div class="bg-panel px-3 py-2.5">
+            <p class="text-[11px] uppercase tracking-[0.04em] text-muted">Базовая</p>
+            <p class="tabular mt-0.5 text-[15px] font-semibold text-ink">{{ money(unit.basePrice || unit.price, project?.currency) }}</p>
+          </div>
+          <div class="bg-panel px-3 py-2.5">
+            <p class="text-[11px] uppercase tracking-[0.04em] text-muted">Акция</p>
+            <p class="mt-0.5 text-[15px] font-semibold" :class="promo ? 'text-bad' : 'text-muted'">
+              {{ promo ? `−${promo.value}% · ${promo.name}` : 'нет' }}
+            </p>
+          </div>
         </div>
 
-        <p v-if="!explication.own && explication.rooms.length" class="mt-2.5 flex items-start gap-1.5 text-[11.5px] text-muted">
-          <Icon name="ph:info" size="13" class="mt-0.5 shrink-0" />
-          Любая правка создаст отдельную экспликацию для этого помещения — остальные квартиры планировки не изменятся.
+        <label v-if="canPrice" class="mt-3 flex flex-col gap-1 text-[11px] font-medium uppercase tracking-[0.03em] text-muted">
+          Новая цена, {{ project?.currency }}
+          <input
+            type="number" :value="unit.price"
+            class="focus-ring tabular rounded-lg border border-line bg-panel px-2.5 py-1.5 text-[14px] font-semibold text-ink"
+            @change="patchField('price', ($event.target as HTMLInputElement).value)"
+          >
+        </label>
+        <p v-else class="mt-3 flex items-center gap-1.5 text-[11.5px] text-muted">
+          <Icon name="ph:lock-simple" size="13" />
+          <template v-if="unit.contractId">Помещение под договором — цена меняется через договор</template>
+          <template v-else>Цену ведёт прайс-лист — обратитесь к руководителю отдела</template>
         </p>
+
+        <div class="mt-4">
+          <UnitPriceHistory :unit="unit" />
+        </div>
       </div>
 
-      <!-- расположение на плане этажа -->
+      <!-- документы сделки -->
+      <div v-else-if="tab === 'docs'" class="pt-4">
+        <UnitDocumentsTab :unit="unit" />
+      </div>
+
+      <!-- активность: цена, статусы, брони, платежи -->
       <div v-else class="pt-4">
-        <template v-if="floorPlan?.imageUrl && planZones.length">
-          <p class="mb-2 flex items-start gap-1.5 text-[12px] text-muted">
-            <Icon name="ph:cursor-click" size="14" class="mt-0.5 shrink-0" />
-            <span v-if="isMarked">Помещение выделено на плане {{ unit.floor }} этажа. Клик по соседней области откроет её карточку.</span>
-            <span v-else>Это помещение ещё не размечено на плане {{ unit.floor }} этажа.</span>
-          </p>
-          <ImageZoneEditor
-            readonly :image-url="floorPlan.imageUrl" :zones="planZones" :options="planOptions" @pick="onPlanPick"
-          />
-        </template>
-        <EmptyState
-          v-else compact icon="ph:polygon"
-          :title="floorPlan?.imageUrl ? 'Этаж не размечен' : 'План этажа не загружен'"
-          text="Разметка помещений делается в карточке дома, раздел «Планировки этажей»"
-        >
-          <template #action>
-            <AppButton size="sm" icon="ph:arrow-right" @click="navigateTo(`/buildings/${unit!.buildingId}?tab=floorplans`)">Перейти к планам этажей</AppButton>
-          </template>
-        </EmptyState>
+        <UnitActivityTab :unit="unit" />
       </div>
 
+      <!-- действия по сделке живут во вкладке «Сделка»: на обзоре и в цене
+           они отвлекают от того, зачем туда зашли -->
+      <template v-if="tab === 'deal'">
       <div class="my-4 border-t border-line" />
 
-      <!-- быстрая смена статуса: снять с продажи и вернуть обратно -->
       <div v-if="!unit.contractId" class="mb-3 flex flex-wrap items-center gap-2">
         <span class="text-[11px] font-semibold uppercase tracking-[0.04em] text-muted">Статус</span>
         <Chip
@@ -415,6 +473,7 @@ function setStatus(status: UnitStatus) {
       <div v-else-if="unit.status === 'closed'">
         <p class="rounded-xl2 bg-soft px-3.5 py-3 text-[12.5px] text-muted">Объект закрыт для продаж.</p>
       </div>
+      </template>
     </template>
 
     <AppModal
