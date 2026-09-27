@@ -2,9 +2,10 @@
 import * as XLSX from 'xlsx'
 import { CLIENT_COLUMNS, clientCellText, type ClientColumnKey } from '~/utils/clientColumns'
 import { emptyClientFilters, matchesClientFilters, type ClientFilterState } from '~/utils/clientFilters'
-import { CLIENT_STATUS_META } from '~/utils/clientProfile'
+import { CLIENT_STATUS_META, type ClientProfile } from '~/utils/clientProfile'
 import { money, moneyCompact, pluralRu } from '~/utils/format'
 import type { MetricItem } from '~/components/dashboard/MetricStrip.vue'
+import type { ContextAction } from '~/components/ui/ContextMenu.vue'
 
 definePageMeta({ breadcrumb: [{ label: 'Продажи' }, { label: 'Клиенты' }] })
 
@@ -116,8 +117,8 @@ const metrics = computed<MetricItem[]>(() => {
 
 /* --------------------------------- экспорт -------------------------------- */
 
-function exportRows() {
-  const rows = selectedProfiles.value.length ? selectedProfiles.value : visible.value
+function exportRows(only?: ClientProfile[]) {
+  const rows = only?.length ? only : selectedProfiles.value.length ? selectedProfiles.value : visible.value
   if (!rows.length) { ui.toast('Нечего выгружать', 'warn'); return }
   const columns = CLIENT_COLUMNS.filter((c) => c.required || visibleKeys.value.includes(c.key))
   const data = rows.map((p) => Object.fromEntries(columns.map((c) => [c.label, clientCellText(p, c.key)])))
@@ -127,6 +128,41 @@ function exportRows() {
   XLSX.utils.book_append_sheet(book, sheet, 'Клиенты')
   XLSX.writeFile(book, 'клиенты.xlsx')
   ui.toast(`Выгружено клиентов: ${rows.length}`, 'ok')
+}
+
+/* ----------------------------- контекстное меню --------------------------- */
+
+/** Правый клик по строке: действия, ради которых иначе открывают досье. */
+const menu = useContextMenu<string>()
+const menuProfile = computed(() => profile(menu.row.value ?? undefined))
+
+const menuActions = computed<ContextAction[]>(() => {
+  const p = menuProfile.value
+  return [
+    { key: 'open', label: 'Открыть досье', icon: 'ph:arrow-square-out', hint: '↵' },
+    { key: 'call', label: 'Позвонить', icon: 'ph:phone', disabled: !p?.client.phone },
+    { key: 'whatsapp', label: 'Написать в WhatsApp', icon: 'ph:whatsapp-logo', disabled: !(p?.client.whatsapp || p?.client.phone) },
+    { key: 'contract', label: 'Открыть договор', icon: 'ph:file-text', disabled: !p?.contracts.length, separated: true },
+    { key: 'unit', label: 'Открыть помещение', icon: 'ph:grid-nine', disabled: !p?.units.length },
+    { key: 'select', label: selected.value.includes(menu.row.value ?? '') ? 'Убрать из выделения' : 'Добавить к выделению', icon: 'ph:check-square', separated: true },
+    { key: 'export', label: 'Выгрузить строку в Excel', icon: 'ph:file-xls' },
+  ]
+})
+
+function onMenuPick(key: string) {
+  const p = menuProfile.value
+  if (!p) return
+  if (key === 'open') activeId.value = p.client.id
+  if (key === 'call' && p.client.phone) window.open(`tel:+${p.client.phone}`)
+  if (key === 'whatsapp') window.open(`https://wa.me/${(p.client.whatsapp || p.client.phone).replace(/\D/g, '')}`, '_blank')
+  if (key === 'contract' && p.contracts[0]) navigateTo(`/contracts/${p.contracts[0].id}`)
+  if (key === 'unit' && p.units[0]) activeUnitId.value = p.units[0].id
+  if (key === 'select') {
+    selected.value = selected.value.includes(p.client.id)
+      ? selected.value.filter((x) => x !== p.client.id)
+      : [...selected.value, p.client.id]
+  }
+  if (key === 'export') exportRows([p])
 }
 
 /* --------------------------------- карточка ------------------------------- */
@@ -191,7 +227,7 @@ async function createClient() {
           </Transition>
         </div>
 
-        <AppButton icon="ph:file-xls" @click="exportRows">
+        <AppButton icon="ph:file-xls" @click="exportRows()">
           Excel<span v-if="selected.length" class="tabular text-muted">· {{ selected.length }}</span>
         </AppButton>
         <AppButton variant="primary" icon="ph:plus-bold" @click="createOpen = true">Новый клиент</AppButton>
@@ -206,6 +242,12 @@ async function createClient() {
       :profiles="visible" :visible-keys="visibleKeys" :selected="selected"
       :sort-key="sortKey" :sort-dir="sortDir"
       @open="activeId = $event" @sort="onSort" @update:selected="selected = $event"
+      @context="menu.open($event.event, $event.id)"
+    />
+
+    <ContextMenu
+      :x="menu.x.value" :y="menu.y.value" :actions="menuActions"
+      :title="menuProfile?.client.name" @pick="onMenuPick" @close="menu.close()"
     />
 
     <!-- массовое выделение -->
@@ -225,7 +267,7 @@ async function createClient() {
           </p>
         </div>
         <span class="h-6 w-px bg-line" />
-        <AppButton size="sm" icon="ph:file-xls" @click="exportRows">Выгрузить выбранных</AppButton>
+        <AppButton size="sm" icon="ph:file-xls" @click="exportRows()">Выгрузить выбранных</AppButton>
         <button class="ml-auto text-[12px] font-semibold text-muted hover:text-bad" @click="selected = []">Снять выделение</button>
       </div>
     </Transition>

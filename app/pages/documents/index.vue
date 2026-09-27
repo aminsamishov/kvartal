@@ -27,7 +27,7 @@ const rows = computed(() => misc.generatedDocs
       <NuxtLink to="/settings/templates" class="ml-auto"><AppButton icon="ph:gear-six">Шаблоны документов</AppButton></NuxtLink>
     </div>
 
-    <div class="overflow-x-auto rounded-card border border-line">
+    <div class="table-scroll rounded-card border border-line">
       <table class="data-table">
         <thead><tr><th>Документ</th><th>Процесс</th><th>Договор</th><th>Клиент</th><th>Создан</th><th>Кем</th></tr></thead>
         <tbody>

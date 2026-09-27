@@ -344,7 +344,8 @@ watch(() => scope.value.selected.length, (n) => { if (n < 2) compareTray.value =
       <UnitListTable
         v-else
         :units="units" :dim-ids="new Set(units.filter((u) => !matchIds.has(u.id)).map((u) => u.id))"
-        :scope-key="scopeKey" :scores="scores" @open="onUnitClick"
+        :scope-key="scopeKey" :scores="scores"
+        @open="onUnitClick" @reserve="emit('reserve', $event)" @contract="emit('contract', $event)"
       />
     </template>
 

@@ -122,7 +122,7 @@ function generateDoc(name: string, process: string) {
       ]"
     />
 
-    <div v-if="tab === 'schedule'" class="overflow-x-auto rounded-card border border-line">
+    <div v-if="tab === 'schedule'" class="table-scroll rounded-card border border-line">
       <table class="data-table">
         <thead><tr><th>Срок</th><th>Сумма</th><th>Оплачено</th><th>Остаток</th><th>Статус</th></tr></thead>
         <tbody>
@@ -141,7 +141,7 @@ function generateDoc(name: string, process: string) {
       <div class="flex justify-end">
         <AppButton variant="primary" icon="ph:plus-bold" @click="showPayForm = true">Зарегистрировать платёж</AppButton>
       </div>
-      <div class="overflow-x-auto rounded-card border border-line">
+      <div class="table-scroll rounded-card border border-line">
         <table class="data-table">
           <thead><tr><th>Дата</th><th>Сумма</th><th>Способ</th><th>Статус</th><th>Чек</th><th /></tr></thead>
           <tbody>

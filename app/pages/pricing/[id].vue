@@ -98,7 +98,7 @@ function diffPct(oldP: number, newP: number) {
         </div>
       </div>
 
-      <div class="overflow-x-auto rounded-card border border-line">
+      <div class="table-scroll rounded-card border border-line">
         <table class="data-table">
           <thead>
             <tr>
@@ -120,7 +120,7 @@ function diffPct(oldP: number, newP: number) {
       </div>
     </div>
 
-    <div v-else class="overflow-x-auto rounded-card border border-line">
+    <div v-else class="table-scroll rounded-card border border-line">
       <table class="data-table">
         <thead><tr><th>№</th><th>Дом</th><th>Старая цена</th><th>Новая цена</th><th>Изменение</th><th v-if="draft.status === 'draft'" /></tr></thead>
         <tbody>

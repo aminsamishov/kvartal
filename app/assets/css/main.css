@@ -188,6 +188,32 @@ body {
      .truncate/min-w-0 там, где перенос действительно нужен. */
   white-space: nowrap;
 }
+/* Прокручиваемая таблица: шапка липнет к верху контейнера, а не уезжает.
+   Контейнеру нужна своя высота — иначе sticky не к чему прилипать. */
+.table-scroll {
+  overflow: auto;
+  max-height: calc(100vh - 232px);
+  overscroll-behavior: contain;
+}
+.table-scroll .data-table thead th { box-shadow: 0 1px 0 var(--line); }
+
+/* Строка под клавиатурным курсором: видно, что выбрано, без мыши. */
+.data-table tbody tr.is-cursor { background: var(--soft); }
+.data-table tbody tr.is-cursor td:first-child { box-shadow: inset 2px 0 0 var(--fill-plum); }
+
+/* Ручка изменения ширины колонки. Появляется по наведению на заголовок:
+   постоянная полоса в каждой ячейке шумит сильнее, чем помогает.
+   Отдельный position заголовку не нужен — sticky уже создаёт контекст. */
+.col-grip {
+  position: absolute; top: 0; right: -3px; bottom: 0; width: 7px;
+  cursor: col-resize; opacity: 0; transition: opacity .12s; z-index: 4;
+}
+.data-table th:hover .col-grip, .col-grip.is-active { opacity: 1; }
+.col-grip::after {
+  content: ''; position: absolute; top: 4px; bottom: 4px; left: 3px; width: 2px;
+  border-radius: 2px; background: var(--fill-plum);
+}
+
 .data-table tbody tr { transition: background .1s; }
 .data-table tbody tr:hover { background: var(--soft); }
 .data-table tbody tr:last-child td { border-bottom: none; }

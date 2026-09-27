@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { Unit } from '~/types/models'
 import type { MatchedUnit } from '~/composables/useLeadMatching'
+import type { ContextAction } from '~/components/ui/ContextMenu.vue'
 import { UNIT_KIND_META, UNIT_STATUS_META } from '~/utils/meta'
 import { area as fmtArea, money } from '~/utils/format'
 
@@ -12,7 +13,11 @@ const props = withDefaults(defineProps<{
   scores?: Map<string, MatchedUnit>
 }>(), { dimIds: () => new Set<string>() })
 
-defineEmits<{ open: [string] }>()
+const emit = defineEmits<{
+  open: [string]
+  reserve: [string]
+  contract: [string]
+}>()
 
 const board = useBoardStore()
 const selected = computed(() => new Set(props.scopeKey ? board.scope(props.scopeKey).selected : []))
@@ -59,6 +64,43 @@ const columns = computed(() => {
   return props.scores?.size ? [...base, { key: 'score' as SortKey, label: 'Совпадение' }] : base
 })
 
+/** Ширины колонок и клавиатура — как в остальных реестрах. */
+const { style: colStyle, start: startResize, reset: resetColumn, active: resizing } = useColumnResize('units')
+const { cursor } = useRowNavigation({
+  count: () => sorted.value.length,
+  onOpen: (i) => { const u = sorted.value[i]; if (u) emit('open', u.id) },
+  onToggle: (i) => { const u = sorted.value[i]; if (u && props.scopeKey) board.toggleSelect(props.scopeKey, u.id) },
+})
+
+/* --------------------------- быстрые действия ----------------------------- */
+
+const menu = useContextMenu<Unit>()
+const ui = useUiStore()
+
+const menuActions = computed<ContextAction[]>(() => {
+  const u = menu.row.value
+  return [
+    { key: 'open', label: 'Открыть карточку', icon: 'ph:arrow-square-out', hint: '↵' },
+    { key: 'reserve', label: 'Забронировать', icon: 'ph:bookmark-simple', hint: 'B', disabled: u?.status !== 'free' },
+    { key: 'contract', label: 'Оформить договор', icon: 'ph:file-text', hint: 'D', disabled: u?.status === 'sold' || u?.status === 'installment' },
+    { key: 'select', label: 'В сравнение', icon: 'ph:arrows-left-right', hint: 'C', disabled: !props.scopeKey, separated: true },
+    { key: 'copy', label: 'Скопировать номер', icon: 'ph:copy' },
+  ]
+})
+
+function onMenuPick(key: string) {
+  const u = menu.row.value
+  if (!u) return
+  if (key === 'open') emit('open', u.id)
+  if (key === 'reserve') emit('reserve', u.id)
+  if (key === 'contract') emit('contract', u.id)
+  if (key === 'select' && props.scopeKey) board.toggleSelect(props.scopeKey, u.id)
+  if (key === 'copy') {
+    navigator.clipboard?.writeText(u.number)
+    ui.toast(`Номер № ${u.number} скопирован`, 'ok')
+  }
+}
+
 const allSelected = computed(() => sorted.value.length > 0
   && sorted.value.every((u) => props.dimIds.has(u.id) || selected.value.has(u.id)))
 
@@ -71,26 +113,36 @@ function toggleAll() {
 </script>
 
 <template>
-  <div class="overflow-x-auto rounded-card border border-line">
+  <div class="table-scroll rounded-card border border-line">
     <table class="data-table">
       <thead>
         <tr>
           <th v-if="scopeKey" class="w-9">
             <input type="checkbox" class="accent-plum" :checked="allSelected" title="Выделить всё" @change="toggleAll">
           </th>
-          <th v-for="col in columns" :key="col.key" class="cursor-pointer select-none" @click="toggleSort(col.key)">
+          <th
+            v-for="col in columns" :key="col.key" class="cursor-pointer select-none"
+            :style="colStyle(col.key)" @click="toggleSort(col.key)"
+          >
             <span class="inline-flex items-center gap-1">
               {{ col.label }}
               <Icon v-if="sortKey === col.key" :name="sortDir === 1 ? 'ph:caret-up' : 'ph:caret-down'" size="11" />
             </span>
+            <span
+              class="col-grip" :class="resizing === col.key ? 'is-active' : ''"
+              title="Потяните, чтобы изменить ширину; двойной клик — автоширина"
+              @pointerdown="startResize(col.key, $event)" @dblclick.stop="resetColumn(col.key)" @click.stop
+            />
           </th>
         </tr>
       </thead>
       <tbody>
         <tr
-          v-for="u in sorted" :key="u.id" class="cursor-pointer"
-          :class="[dimIds.has(u.id) ? 'opacity-35' : '', selected.has(u.id) ? 'bg-plum-soft/50' : '']"
-          @click="$emit('open', u.id)"
+          v-for="(u, i) in sorted" :key="u.id" class="cursor-pointer"
+          :class="[dimIds.has(u.id) ? 'opacity-35' : '', selected.has(u.id) ? 'bg-plum-soft/50' : '', cursor === i ? 'is-cursor' : '']"
+          :data-row-index="i"
+          @click="emit('open', u.id)"
+          @contextmenu="menu.open($event, u)"
         >
           <td v-if="scopeKey" @click.stop>
             <input type="checkbox" class="accent-plum" :checked="selected.has(u.id)" @change="board.toggleSelect(scopeKey, u.id)">
@@ -114,5 +166,10 @@ function toggleAll() {
       </tbody>
     </table>
     <EmptyState v-if="!sorted.length" compact icon="ph:grid-nine" title="Нет объектов" />
+
+    <ContextMenu
+      :x="menu.x.value" :y="menu.y.value" :actions="menuActions"
+      :title="menu.row.value ? `№ ${menu.row.value.number}` : ''" @pick="onMenuPick" @close="menu.close()"
+    />
   </div>
 </template>

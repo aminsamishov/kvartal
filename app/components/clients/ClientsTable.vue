@@ -24,9 +24,13 @@ const emit = defineEmits<{
   open: [string]
   sort: [ClientColumnKey]
   'update:selected': [string[]]
+  context: [{ event: MouseEvent; id: string }]
 }>()
 
 const columns = computed(() => CLIENT_COLUMNS.filter((c) => c.required || props.visibleKeys.includes(c.key)))
+
+/** Ширины колонок настраиваются мышью и переживают перезагрузку. */
+const { style: colStyle, start: startResize, reset: resetColumn, active: resizing } = useColumnResize('clients')
 
 const sorted = computed(() => {
   const dir = props.sortDir
@@ -54,6 +58,14 @@ function onRowClick(id: string, e: MouseEvent) {
   else emit('open', id)
 }
 
+/* Клавиатура: ↑/↓ ведут курсор, Enter открывает досье, пробел выделяет. */
+const { cursor } = useRowNavigation({
+  count: () => sorted.value.length,
+  onOpen: (i) => { const p = sorted.value[i]; if (p) emit('open', p.client.id) },
+  onToggle: (i) => { const p = sorted.value[i]; if (p) toggleOne(p.client.id) },
+  enabled: () => !document.querySelector('[data-drawer-open]'),
+})
+
 function dueTone(p: ClientProfile) {
   const next = p.totals.nextDue
   if (!next) return 'text-muted'
@@ -64,7 +76,7 @@ function dueTone(p: ClientProfile) {
 </script>
 
 <template>
-  <div class="overflow-x-auto rounded-card border border-line bg-panel">
+  <div class="table-scroll rounded-card border border-line bg-panel">
     <table class="data-table client-table">
       <thead>
         <tr>
@@ -75,29 +87,41 @@ function dueTone(p: ClientProfile) {
             v-for="col in columns" :key="col.key"
             class="cursor-pointer select-none"
             :class="[col.align === 'right' ? 'text-right' : '', col.key === 'client' ? 'pin pin--name' : '']"
-            :style="{ minWidth: col.width }"
+            :style="colStyle(col.key, col.width)"
             @click="emit('sort', col.key)"
           >
             <span class="inline-flex items-center gap-1" :class="col.align === 'right' ? 'flex-row-reverse' : ''">
               {{ col.label }}
               <Icon v-if="sortKey === col.key" :name="sortDir === 1 ? 'ph:caret-up' : 'ph:caret-down'" size="11" />
             </span>
+            <span
+              class="col-grip" :class="resizing === col.key ? 'is-active' : ''"
+              title="Потяните, чтобы изменить ширину; двойной клик — автоширина"
+              @pointerdown="startResize(col.key, $event)"
+              @dblclick.stop="resetColumn(col.key)"
+              @click.stop
+            />
           </th>
         </tr>
       </thead>
 
       <tbody>
         <tr
-          v-for="p in sorted" :key="p.client.id"
+          v-for="(p, i) in sorted" :key="p.client.id"
           class="group cursor-pointer"
-          :class="selectedSet.has(p.client.id) ? 'is-selected' : ''"
+          :class="[selectedSet.has(p.client.id) ? 'is-selected' : '', cursor === i ? 'is-cursor' : '']"
+          :data-row-index="i"
           @click="onRowClick(p.client.id, $event)"
+          @contextmenu="emit('context', { event: $event, id: p.client.id })"
         >
           <td class="pin" @click.stop>
             <input type="checkbox" class="accent-plum" :checked="selectedSet.has(p.client.id)" @change="toggleOne(p.client.id)">
           </td>
 
-          <td v-for="col in columns" :key="col.key" :class="[col.align === 'right' ? 'text-right' : '', col.key === 'client' ? 'pin pin--name' : '']">
+          <td
+            v-for="col in columns" :key="col.key" :style="colStyle(col.key)"
+            :class="[col.align === 'right' ? 'text-right' : '', col.key === 'client' ? 'pin pin--name' : '', colStyle(col.key).width ? 'truncate' : '']"
+          >
             <!-- клиент -->
             <template v-if="col.key === 'client'">
               <span class="flex items-center gap-2.5">
@@ -232,5 +256,8 @@ function dueTone(p: ClientProfile) {
 }
 .client-table :deep(tbody tr.is-selected .pin) {
   background: color-mix(in srgb, var(--plum-bg) 70%, var(--panel));
+}
+.client-table :deep(tbody tr.is-cursor .pin) {
+  background: var(--soft);
 }
 </style>
