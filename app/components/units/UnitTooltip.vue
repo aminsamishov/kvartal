@@ -7,6 +7,10 @@ import type { MatchedUnit } from '~/composables/useLeadMatching'
 
 const props = defineProps<{ unit: Unit | null; x: number; y: number; score?: MatchedUnit }>()
 const settingsStore = useSettingsStore()
+const unitsStore = useUnitsStore()
+
+// очередь на занятый объект — сигнал «торопись», его нельзя прятать в карточке
+const queue = computed(() => (props.unit ? unitsStore.queueFor(props.unit.id).length : 0))
 
 const promo = computed(() => (props.unit ? bestPromoForUnit(props.unit, settingsStore.promotions) : null))
 const finalPrice = computed(() => (props.unit && promo.value ? Math.round(props.unit.price * (1 - promo.value.value / 100)) : props.unit?.price ?? 0))
@@ -39,6 +43,7 @@ const style = computed(() => {
         <div v-if="unit.rooms" class="flex justify-between"><span class="text-muted">Комнат</span><span class="tabular font-medium">{{ unit.rooms }}</span></div>
         <div class="flex justify-between"><span class="text-muted">Цена</span><span class="tabular font-semibold">{{ money(finalPrice) }}</span></div>
         <div v-if="promo" class="flex justify-between text-bad"><span>Акция «{{ promo.name }}»</span><span class="font-semibold">−{{ promo.value }}%</span></div>
+        <div v-if="queue" class="flex justify-between text-warn"><span>В очереди</span><span class="tabular font-semibold">{{ queue }}</span></div>
       </div>
 
       <!-- разбивка совпадения: менеджер должен видеть, за что снят процент -->

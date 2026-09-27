@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Building, Unit } from '~/types/models'
+import type { Building, Unit, ZonePoint } from '~/types/models'
 import type { MatchedUnit } from '~/composables/useLeadMatching'
 import type { ZoneMark } from '~/components/units/UnitZoneCanvas.vue'
 import { UNIT_BOARD_COLOR, UNIT_STATUS_META } from '~/utils/meta'
@@ -42,18 +42,24 @@ const floorUnits = computed(() => props.units
 const unitById = computed(() => new Map(props.units.map((u) => [u.id, u])))
 const selected = computed(() => new Set(scope.value.selected))
 
+/** Прямоугольник хранится двумя углами — на полотно отдаём четыре точки. */
+function polygonOf(zone: { shape: 'rect' | 'poly'; points: ZonePoint[] }): ZonePoint[] {
+  if (zone.shape === 'poly') return zone.points
+  const [a, b] = zone.points
+  if (!a || !b) return []
+  const x0 = Math.min(a.x, b.x); const x1 = Math.max(a.x, b.x)
+  const y0 = Math.min(a.y, b.y); const y1 = Math.max(a.y, b.y)
+  return [{ x: x0, y: y0 }, { x: x1, y: y0 }, { x: x1, y: y1 }, { x: x0, y: y1 }]
+}
+
 const marks = computed<ZoneMark[]>(() => (plan.value?.zones ?? []).flatMap((z) => {
   const unit = unitById.value.get(z.refId)
-  if (!unit) return []
+  const polygon = polygonOf(z)
+  if (!unit || polygon.length < 3) return []
   const score = props.scores?.get(unit.id)
   return [{
     id: unit.id,
-    polygon: z.shape === 'poly' ? z.points : [
-      { x: Math.min(z.points[0]!.x, z.points[1]!.x), y: Math.min(z.points[0]!.y, z.points[1]!.y) },
-      { x: Math.max(z.points[0]!.x, z.points[1]!.x), y: Math.min(z.points[0]!.y, z.points[1]!.y) },
-      { x: Math.max(z.points[0]!.x, z.points[1]!.x), y: Math.max(z.points[0]!.y, z.points[1]!.y) },
-      { x: Math.min(z.points[0]!.x, z.points[1]!.x), y: Math.max(z.points[0]!.y, z.points[1]!.y) },
-    ],
+    polygon,
     color: UNIT_BOARD_COLOR[unit.status],
     label: `№ ${unit.number}`,
     sublabel: `${unit.rooms || '—'}к · ${moneyCompact(unit.price)}`,

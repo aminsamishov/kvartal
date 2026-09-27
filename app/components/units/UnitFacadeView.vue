@@ -22,6 +22,7 @@ const props = defineProps<{
 const emit = defineEmits<{ open: [string] }>()
 
 const board = useBoardStore()
+const unitsStore = useUnitsStore()
 const scope = computed(() => board.scope(props.scopeKey))
 
 const facades = computed(() => props.building.facades.filter((f) => f.imageUrl))
@@ -75,6 +76,10 @@ const statusLegend = computed(() => {
 function tipUnit(id: string) {
   return unitById.value.get(id)
 }
+/** Сколько человек ждёт этот объект — на фасаде это главный сигнал срочности. */
+function queueOf(id: string) {
+  return unitsStore.queueFor(id).length
+}
 </script>
 
 <template>
@@ -106,6 +111,9 @@ function tipUnit(id: string) {
               <div class="flex justify-between"><dt class="text-muted">Комнат</dt><dd class="tabular font-medium">{{ tipUnit(mark.id)!.rooms || '—' }}</dd></div>
               <div class="flex justify-between"><dt class="text-muted">Площадь</dt><dd class="tabular font-medium">{{ fmtArea(tipUnit(mark.id)!.area) }}</dd></div>
               <div class="flex justify-between"><dt class="text-muted">Цена</dt><dd class="tabular font-semibold">{{ money(tipUnit(mark.id)!.price) }}</dd></div>
+              <div v-if="queueOf(mark.id)" class="flex justify-between text-warn">
+                <dt>В очереди</dt><dd class="tabular font-semibold">{{ queueOf(mark.id) }}</dd>
+              </div>
               <div v-if="scores?.get(mark.id)" class="mt-0.5 flex justify-between border-t border-line pt-0.5">
                 <dt class="text-muted">Совпадение</dt>
                 <dd class="tabular font-bold text-plum">{{ scores!.get(mark.id)!.score }}%</dd>
