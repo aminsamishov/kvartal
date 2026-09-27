@@ -1,10 +1,13 @@
 <script setup lang="ts">
 import { TODAY } from '~/data/seed'
-import { LEAD_STAGE_META, PAYMENT_BUCKET_META, UNIT_STATUS_META } from '~/utils/meta'
-import { fmtDateFull, money, moneyCompact, projectBadge } from '~/utils/format'
-import { avgPricePerM2, lastMonths, managerRows, momDelta, seriesBy } from '~/utils/analytics'
+import { LEAD_PIPELINE, LEAD_STAGE_META, PAYMENT_BUCKET_META, UNIT_STATUS_META } from '~/utils/meta'
+import { fmtDate, fmtDateFull, money, moneyCompact, projectBadge } from '~/utils/format'
+import {
+  avgDealCycleDays, avgPricePerM2, expiringReservations, lastMonths, leadSourceStats,
+  momDelta, planFactSeries, reservationToContract, salesByManager, salesByProject, seriesBy, stageFunnel,
+} from '~/utils/analytics'
 import type { MetricItem } from '~/components/dashboard/MetricStrip.vue'
-import type { LeadStage, UnitStatus } from '~/types/models'
+import type { UnitStatus } from '~/types/models'
 
 definePageMeta({ breadcrumb: [{ label: 'Дашборд' }] })
 
@@ -12,6 +15,7 @@ const unitsStore = useUnitsStore()
 const salesStore = useSalesStore()
 const dealsStore = useDealsStore()
 const settingsStore = useSettingsStore()
+const approvalsStore = useApprovalsStore()
 const miscStore = useMiscStore()
 
 const months = computed(() => lastMonths(TODAY, 12))
@@ -40,6 +44,7 @@ const overdueContracts = computed(() => dealsStore.contracts.filter((c) => deals
 const activeLeads = computed(() => salesStore.leads.filter((l) => l.stage !== 'lost' && l.stage !== 'deal').length)
 const perM2 = computed(() => avgPricePerM2(unitsStore.units))
 
+const freeUnits = computed(() => unitsStore.units.filter((u) => u.status === 'free'))
 const soldShare = computed(() => {
   const total = unitsStore.units.length || 1
   const sold = unitsStore.units.filter((u) => u.status === 'sold' || u.status === 'installment').length
@@ -69,7 +74,9 @@ const metrics = computed<MetricItem[]>(() => [
     hint: 'новых заявок к прошлому месяцу', spark: leadsSeries.value, tone: 'accent', to: '/leads',
   },
   {
-    key: 'm2', label: 'Средняя цена м²', value: money(perM2.value), hint: 'по фонду в продаже',
+    key: 'free', label: 'Свободные квартиры', value: String(freeUnits.value.length),
+    hint: `из ${unitsStore.units.length} помещений`, to: '/board',
+    meter: { pct: unitsStore.units.length ? Math.round((freeUnits.value.length / unitsStore.units.length) * 100) : 0 },
   },
 ])
 
@@ -95,41 +102,47 @@ const chartTotal = computed(() => {
   return measure.value === 'deals' ? `${sum} сделок за 12 мес.` : `${money(sum)} за 12 мес.`
 })
 
+/* ------------------------------ скорость сделки ---------------------------- */
+
+const cycleDays = computed(() => avgDealCycleDays(dealsStore.contracts, salesStore.leads))
+const resToContract = computed(() => reservationToContract(salesStore.reservations))
+const expiring = computed(() => expiringReservations(salesStore.activeReservations, TODAY, 3)
+  .map((x) => ({
+    ...x,
+    unit: unitsStore.unit(x.reservation.unitId),
+    client: salesStore.client(x.reservation.clientId),
+  })))
+
 /* ----------------------------- требует внимания ---------------------------- */
 
-const expiringReservations = computed(() => salesStore.activeReservations
-  .filter((r) => (new Date(r.expiresAt).getTime() - TODAY.getTime()) / 86400000 <= 3).length)
-const staleLeads = computed(() => salesStore.leads.filter((l) => l.stage !== 'lost' && l.stage !== 'deal' && !l.nextAction).length)
+const staleLeads = computed(() => salesStore.leads.filter((l) => salesStore.taskState(l) === 'none'
+  && l.stage !== 'lost' && l.stage !== 'deal').length)
+const overdueTasks = computed(() => salesStore.leads.filter((l) => salesStore.taskState(l) === 'overdue').length)
 const draftPrices = computed(() => usePricingStore().drafts.filter((d) => d.status === 'draft').length)
 
 const attention = computed(() => [
+  { key: 'approval', label: 'Скидки на согласовании', count: approvalsStore.pending.length, tone: 'warn' as const, icon: 'ph:percent', to: '/approvals' },
   { key: 'pay', label: 'Платежи на подтверждении', count: dealsStore.pendingPayments.length, tone: 'warn' as const, icon: 'ph:hand-coins', to: '/payments' },
   { key: 'debt', label: 'Договоры с просрочкой', count: overdueContracts.value.length, tone: 'bad' as const, icon: 'ph:warning-circle', to: '/contracts' },
-  { key: 'res', label: 'Брони истекают за 3 дня', count: expiringReservations.value, tone: 'warn' as const, icon: 'ph:hourglass', to: '/board' },
+  { key: 'res', label: 'Брони истекают за 3 дня', count: expiring.value.length, tone: 'warn' as const, icon: 'ph:hourglass', to: '/board' },
+  { key: 'task', label: 'Просроченные задачи', count: overdueTasks.value, tone: 'bad' as const, icon: 'ph:clock-countdown', to: '/leads' },
   { key: 'lead', label: 'Заявки без следующего шага', count: staleLeads.value, tone: 'info' as const, icon: 'ph:chat-dots', to: '/leads' },
   { key: 'price', label: 'Черновики прайс-листов', count: draftPrices.value, tone: 'neutral' as const, icon: 'ph:tag', to: '/pricing' },
 ].filter((r) => r.count > 0))
 
 /* --------------------------------- воронка -------------------------------- */
 
-// Заявка стоит ровно на одном этапе, поэтому «дошли до этапа» = все заявки,
-// чей этап не раньше текущего. Отказы исключаем: как далеко такая заявка
-// продвинулась до отказа, система не хранит — её считаем отдельной строкой.
-const FUNNEL: LeadStage[] = ['new', 'contacted', 'visit', 'reserved', 'deal']
-const funnelStages = computed(() => {
-  const live = salesStore.leads.filter((l) => l.stage !== 'lost')
-  return FUNNEL.map((stage, i) => ({
-    key: stage,
-    label: LEAD_STAGE_META[stage].label,
-    count: live.filter((l) => FUNNEL.indexOf(l.stage) >= i).length,
-  }))
-})
+const funnelStages = computed(() => stageFunnel(salesStore.leads, LEAD_PIPELINE, (s) => LEAD_STAGE_META[s].label))
 const lostLeads = computed(() => salesStore.leadsByStage('lost').length)
 const funnelConversion = computed(() => {
   const first = funnelStages.value[0]?.count ?? 0
   const last = funnelStages.value[funnelStages.value.length - 1]?.count ?? 0
   return first ? Math.round((last / first) * 100) : 0
 })
+/** Самый узкий переход воронки — там и теряются деньги. */
+const worstStep = computed(() => funnelStages.value
+  .filter((s) => s.conversion !== null)
+  .sort((a, b) => (a.conversion ?? 100) - (b.conversion ?? 100))[0])
 
 /* ----------------------------- статусы объектов ---------------------------- */
 
@@ -152,6 +165,14 @@ const bucketCounts = computed(() => buckets.map((b) => ({
   key: b,
   count: dealsStore.contracts.filter((c) => c.status === 'active' && dealsStore.paymentBoardBucket(c.id) === b).length,
 })))
+const planFact = computed(() => planFactSeries(lastMonths(TODAY, 8), dealsStore.scheduleItems, dealsStore.payments))
+
+/* ------------------------------- разрезы KPI ------------------------------- */
+
+const byProject = computed(() => salesByProject(dealsStore.contracts, (id) => unitsStore.project(id)?.name ?? '—'))
+const byManager = computed(() => salesByManager(dealsStore.contracts, salesStore.leads,
+  (id) => settingsStore.users.find((u) => u.id === id)?.name ?? '—'))
+const bySource = computed(() => leadSourceStats(salesStore.leads))
 
 /* -------------------------------- проекты --------------------------------- */
 
@@ -160,15 +181,6 @@ const projectRows = computed(() => unitsStore.projects.filter((p) => !p.archived
   stats: unitsStore.projectStats(p.id),
   buildings: unitsStore.buildingsByProject(p.id).length,
 })))
-
-/* ------------------------------- менеджеры -------------------------------- */
-
-const managers = computed(() => {
-  const list = settingsStore.users.filter((u) => u.role === 'manager' && u.active)
-  return managerRows(list.map((u) => u.id), salesStore.leads, salesStore.reservations)
-    .map((row) => ({ ...row, user: list.find((u) => u.id === row.id)! }))
-    .filter((r) => r.user)
-})
 
 /* ------------------------------ последние сделки --------------------------- */
 
@@ -221,7 +233,7 @@ const recentContracts = computed(() => [...dealsStore.contracts]
         <div v-if="attention.length" class="-mx-1.5 flex flex-col">
           <NuxtLink
             v-for="a in attention" :key="a.key" :to="a.to"
-            class="flex items-center gap-3 rounded-xl2 px-1.5 py-2.5 transition-colors hover:bg-soft"
+            class="flex items-center gap-3 rounded-xl2 px-1.5 py-2 transition-colors hover:bg-soft"
           >
             <span
               class="grid h-8 w-8 shrink-0 place-items-center rounded-xl2"
@@ -236,13 +248,64 @@ const recentContracts = computed(() => [...dealsStore.contracts]
       </AppCard>
     </div>
 
+    <!-- деньги: план/факт и скорость сделки -->
+    <div class="grid grid-cols-1 gap-4 xl:grid-cols-3">
+      <AppCard title="План / факт поступлений" subtitle="План — суммы по графикам, факт — подтверждённые платежи" class="xl:col-span-2">
+        <PlanFactChart :points="planFact" />
+      </AppCard>
+
+      <AppCard title="Скорость сделки" subtitle="Сколько времени клиент идёт до договора">
+        <div class="flex flex-col gap-3.5">
+          <div>
+            <p class="tabular text-[26px] font-semibold leading-none tracking-[-0.03em] text-ink">
+              {{ cycleDays ?? '—' }}<span v-if="cycleDays" class="ml-1 text-[14px] font-medium text-muted">дн.</span>
+            </p>
+            <p class="mt-1 text-[12px] text-muted">Средний цикл: от заявки до подписанного договора</p>
+          </div>
+
+          <div class="border-t border-line pt-3">
+            <div class="flex items-baseline justify-between gap-2">
+              <p class="text-[12.5px] text-ink">Бронь → договор</p>
+              <p class="tabular text-[15px] font-semibold text-ink">{{ resToContract.percent }}%</p>
+            </div>
+            <ProgressBar :percent="resToContract.percent" tone="ok" :show-label="false" class="mt-1.5" />
+            <p class="mt-1 text-[11.5px] text-muted">{{ resToContract.converted }} из {{ resToContract.total }} броней стали договором</p>
+          </div>
+
+          <div class="border-t border-line pt-3">
+            <div class="flex items-baseline justify-between gap-2">
+              <p class="text-[12.5px] text-ink">Просроченные брони</p>
+              <p class="tabular text-[15px] font-semibold" :class="expiring.length ? 'text-warn' : 'text-ink'">{{ expiring.length }}</p>
+            </div>
+            <div v-if="expiring.length" class="mt-1.5 flex flex-col gap-1">
+              <NuxtLink
+                v-for="x in expiring.slice(0, 4)" :key="x.reservation.id" to="/board"
+                class="flex items-center gap-2 rounded-lg bg-soft px-2 py-1 text-[11.5px] hover:bg-line/40"
+              >
+                <span class="tabular font-semibold">№ {{ x.unit?.number ?? '—' }}</span>
+                <span class="min-w-0 flex-1 truncate text-muted">{{ x.client?.name ?? '—' }}</span>
+                <StatusTag :tone="x.daysLeft <= 0 ? 'bad' : 'warn'" size="sm">
+                  {{ x.daysLeft <= 0 ? 'истекла' : `${x.daysLeft} дн.` }}
+                </StatusTag>
+              </NuxtLink>
+            </div>
+            <p v-else class="mt-1 text-[11.5px] text-muted">Все брони в сроке</p>
+          </div>
+        </div>
+      </AppCard>
+    </div>
+
     <!-- воронка / фонд / оплаты -->
     <div class="grid grid-cols-1 gap-4 xl:grid-cols-3">
-      <AppCard title="Воронка заявок" :subtitle="`Дошли до сделки ${funnelConversion}% · ${lostLeads} отказов`">
+      <AppCard title="Конверсия по этапам" :subtitle="`Дошли до сделки ${funnelConversion}% · ${lostLeads} отказов`">
         <template #actions>
           <NuxtLink to="/leads" class="text-[12.5px] font-semibold text-plum hover:underline">Все заявки</NuxtLink>
         </template>
         <FunnelBars :stages="funnelStages" />
+        <p v-if="worstStep" class="mt-3 flex items-start gap-1.5 rounded-xl2 bg-soft px-2.5 py-2 text-[11.5px] text-muted">
+          <Icon name="ph:warning-circle" size="13" class="mt-0.5 shrink-0 text-warn" />
+          Самый узкий переход — «{{ worstStep.label }}»: {{ worstStep.conversion }}% от предыдущего этапа
+        </p>
       </AppCard>
 
       <AppCard title="Структура фонда" :subtitle="`${unitsStore.units.length} помещений во всех проектах`">
@@ -262,7 +325,25 @@ const recentContracts = computed(() => [...dealsStore.contracts]
       </AppCard>
     </div>
 
-    <!-- проекты + менеджеры -->
+    <!-- разрезы: ЖК / менеджеры / источники -->
+    <div class="grid grid-cols-1 gap-4 xl:grid-cols-3">
+      <AppCard title="Продажи по ЖК" subtitle="Сумма договоров за всё время">
+        <BarList :rows="byProject" :format-value="(v) => moneyCompact(v)" secondary-label="сделок" />
+      </AppCard>
+
+      <AppCard title="Продажи по менеджерам" subtitle="Через заявку, из которой вырос договор">
+        <template #actions>
+          <NuxtLink to="/users" class="text-[12.5px] font-semibold text-plum hover:underline">Все</NuxtLink>
+        </template>
+        <BarList :rows="byManager" :format-value="(v) => moneyCompact(v)" secondary-label="сделок" tone="ok" />
+      </AppCard>
+
+      <AppCard title="Источники лидов" subtitle="Сколько пришло и сколько дошло до сделки">
+        <BarList :rows="bySource" secondary-label="в сделке" tone="muted" />
+      </AppCard>
+    </div>
+
+    <!-- проекты + свободный фонд -->
     <div class="grid grid-cols-1 gap-4 xl:grid-cols-3">
       <AppCard :padded="false" flush class="xl:col-span-2">
         <SectionHeader title="Проекты" subtitle="Реализация фонда и выручка" to="/objects" class="px-5 pt-5" />
@@ -291,7 +372,7 @@ const recentContracts = computed(() => [...dealsStore.contracts]
                 </td>
                 <td class="tabular text-right">{{ r.buildings }}</td>
                 <td class="tabular text-right">{{ r.stats.total }}</td>
-                <td class="tabular text-right">{{ r.stats.free }}</td>
+                <td class="tabular text-right font-semibold">{{ r.stats.free }}</td>
                 <td>
                   <div class="flex items-center gap-2">
                     <div class="h-1.5 flex-1 overflow-hidden rounded-full bg-soft">
@@ -301,51 +382,6 @@ const recentContracts = computed(() => [...dealsStore.contracts]
                   </div>
                 </td>
                 <td class="tabular text-right font-semibold">{{ moneyCompact(r.stats.revenue, r.project.currency) }}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </AppCard>
-
-      <AppCard title="Менеджеры" subtitle="Заявки и конверсия в сделку">
-        <template #actions>
-          <NuxtLink to="/users" class="text-[12.5px] font-semibold text-plum hover:underline">Все</NuxtLink>
-        </template>
-        <div class="flex flex-col gap-3">
-          <div v-for="m in managers" :key="m.id" class="flex items-center gap-2.5">
-            <AppAvatar :name="m.user.name" :color="m.user.avatarColor" size="sm" />
-            <div class="min-w-0 flex-1">
-              <div class="flex items-baseline justify-between gap-2">
-                <p class="truncate text-[12.5px] font-medium text-ink">{{ m.user.name }}</p>
-                <p class="tabular shrink-0 text-[12.5px] font-semibold text-ink">{{ m.deals }} <span class="font-normal text-muted">из {{ m.leads }}</span></p>
-              </div>
-              <div class="mt-1 flex items-center gap-2">
-                <div class="h-[5px] flex-1 overflow-hidden rounded-full bg-chart-accent/15">
-                  <span class="block h-full rounded-full bg-chart-accent" :style="{ width: `${Math.min(100, m.conversion)}%` }" />
-                </div>
-                <span class="tabular w-8 shrink-0 text-right text-[11px] text-muted">{{ m.conversion }}%</span>
-              </div>
-            </div>
-          </div>
-          <EmptyState v-if="!managers.length" compact icon="ph:users" title="Менеджеры не назначены" />
-        </div>
-      </AppCard>
-    </div>
-
-    <!-- сделки + журнал -->
-    <div class="grid grid-cols-1 gap-4 xl:grid-cols-3">
-      <AppCard :padded="false" flush class="xl:col-span-2">
-        <SectionHeader title="Последние договоры" subtitle="Свежие сделки по всем проектам" to="/contracts" class="px-5 pt-5" />
-        <div class="overflow-x-auto">
-          <table class="data-table">
-            <thead><tr><th>Договор</th><th>Клиент</th><th>Объект</th><th class="text-right">Сумма</th><th>Статус</th></tr></thead>
-            <tbody>
-              <tr v-for="r in recentContracts" :key="r.contract.id" class="cursor-pointer" @click="navigateTo(`/contracts/${r.contract.id}`)">
-                <td class="tabular font-medium">{{ r.contract.number }}</td>
-                <td class="truncate">{{ r.client?.name ?? '—' }}</td>
-                <td class="text-muted">{{ r.project?.name }} · № {{ r.unit?.number ?? '—' }}</td>
-                <td class="tabular text-right font-semibold">{{ money(r.contract.price, r.contract.currency) }}</td>
-                <td><StatusTag size="sm" :tone="r.contract.status === 'paid' ? 'ok' : r.contract.status === 'active' ? 'info' : 'neutral'">{{ r.contract.status === 'paid' ? 'Оплачен' : r.contract.status === 'active' ? 'Активен' : 'Черновик' }}</StatusTag></td>
               </tr>
             </tbody>
           </table>
@@ -364,5 +400,25 @@ const recentContracts = computed(() => [...dealsStore.contracts]
         </div>
       </AppCard>
     </div>
+
+    <!-- сделки -->
+    <AppCard :padded="false" flush>
+      <SectionHeader title="Последние договоры" subtitle="Свежие сделки по всем проектам" to="/contracts" class="px-5 pt-5" />
+      <div class="overflow-x-auto">
+        <table class="data-table">
+          <thead><tr><th>Договор</th><th>Клиент</th><th>Объект</th><th>Подписан</th><th class="text-right">Сумма</th><th>Статус</th></tr></thead>
+          <tbody>
+            <tr v-for="r in recentContracts" :key="r.contract.id" class="cursor-pointer" @click="navigateTo(`/contracts/${r.contract.id}`)">
+              <td class="tabular font-medium">{{ r.contract.number }}</td>
+              <td class="truncate">{{ r.client?.name ?? '—' }}</td>
+              <td class="text-muted">{{ r.project?.name }} · № {{ r.unit?.number ?? '—' }}</td>
+              <td class="text-muted">{{ r.contract.signedAt ? fmtDate(r.contract.signedAt) : '—' }}</td>
+              <td class="tabular text-right font-semibold">{{ money(r.contract.price, r.contract.currency) }}</td>
+              <td><StatusTag size="sm" :tone="r.contract.status === 'paid' ? 'ok' : r.contract.status === 'active' ? 'info' : 'neutral'">{{ r.contract.status === 'paid' ? 'Оплачен' : r.contract.status === 'active' ? 'Активен' : 'Черновик' }}</StatusTag></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </AppCard>
   </div>
 </template>

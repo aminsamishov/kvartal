@@ -76,6 +76,9 @@ const scores = computed(() => {
   const map = new Map<string, MatchedUnit>()
   for (const u of matchedUnits.value) {
     if (u.kind !== 'apartment' && u.kind !== 'commercial') continue
+    // у проданного и того, что в рассрочке, процент совпадения — шум:
+    // предложить клиенту эту квартиру всё равно нельзя
+    if (u.status !== 'free' && u.status !== 'reserved') continue
     map.set(u.id, scoreUnit(u, interest.value))
   }
   return map

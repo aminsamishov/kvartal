@@ -56,15 +56,14 @@ export function buildLeadSummary(input: {
 
   /* ------------------------------ что ищет ------------------------------- */
 
-  const wants: string[] = []
   const rooms = roomsText(i.roomsMin, i.roomsMax)
-  if (rooms) wants.push(`Ищет ${rooms}`)
-  else wants.push('Ищет квартиру')
+  let head = rooms ? `Ищет ${rooms}` : 'Ищет квартиру'
+  if (i.budgetMax) head += ` до ${money(i.budgetMax)}`
+  else if (lead.budget) head += ` с бюджетом около ${money(lead.budget)}`
+  // название проекта уже содержит кавычки («ЖК «Аврора»») — вторых не нужно
+  if (project) head += ` в ${project.name}`
 
-  if (i.budgetMax) wants.push(`до ${money(i.budgetMax)}`)
-  else if (lead.budget) wants.push(`бюджет около ${money(lead.budget)}`)
-
-  if (project) wants.push(`в «${project.name}»`)
+  const wants: string[] = []
   if (i.floorMin || i.floorMax) {
     wants.push(i.floorMin && i.floorMax
       ? `этаж ${i.floorMin}–${i.floorMax}`
@@ -123,7 +122,7 @@ export function buildLeadSummary(input: {
   if (unit) tail.push(`в работе № ${unit.number}`)
   tail.push(CHANCE_META[chance])
 
-  const text = `${wants.join(' ')}. ${tail.join(', ')}. Следующий шаг — ${step}.`
+  const text = `${[head, ...wants].join(', ')}. ${tail.join(', ')}. Следующий шаг — ${step}.`
     .replace(/\s+/g, ' ')
     .replace(' .', '.')
 

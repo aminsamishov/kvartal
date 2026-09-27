@@ -10,6 +10,7 @@ const unitsStore = useUnitsStore()
 const salesStore = useSalesStore()
 const settingsStore = useSettingsStore()
 const dealsStore = useDealsStore()
+const approvals = useApprovalsStore()
 const misc = useMiscStore()
 const auth = useAuthStore()
 const ui = useUiStore()
@@ -17,17 +18,15 @@ const ui = useUiStore()
 const steps = ['Объект', 'Клиент', 'Условия', 'Договор']
 const step = ref(0)
 
-// шаг 1 — объект
-const unitSearch = ref('')
+// шаг 1 — объект. Подбор тот же, что в карточке заявки и на шахматке:
+// менеджер не должен заново учиться выбирать квартиру в каждом разделе.
 const selectedUnitId = ref<string>((route.query.unit as string) || '')
 // заявка, из которой пришли: связь обязана дойти до договора, иначе источник
 // продажи теряется и аналитика по каналам пустая
 const fromLeadId = computed(() => (route.query.lead as string) || '')
 const fromLead = computed(() => (fromLeadId.value ? salesStore.lead(fromLeadId.value) : undefined))
 const selectedUnit = computed(() => unitsStore.unit(selectedUnitId.value))
-const pickableUnits = computed(() => unitsStore.units.filter((u) =>
-  (u.status === 'free' || u.status === 'reserved') && (!unitSearch.value || u.number.toLowerCase().includes(unitSearch.value.toLowerCase())),
-).slice(0, 40))
+const pickerScope = computed(() => (fromLeadId.value ? `lead:${fromLeadId.value}` : 'deal'))
 
 // шаг 2 — клиент
 const clientMode = ref<'existing' | 'new'>('existing')
@@ -56,7 +55,16 @@ const selectedMethod = computed(() => activeMethods.value.find((m) => m.id === p
 const isFull = computed(() => selectedMethod.value?.kind === 'full')
 const basePrice = computed(() => selectedUnit.value?.price ?? 0)
 const finalPrice = computed(() => Math.round(basePrice.value * (1 - discount.value / 100)))
-const needsApproval = computed(() => discount.value > 5 || dealType.value === 'barter' || dealType.value === 'pledge')
+// согласованную скидку подставляем сразу, чтобы договор печатал ту же цифру,
+// которую руководитель уже утвердил в карточке заявки
+watchEffect(() => {
+  const approved = fromLeadId.value ? approvals.approvedPercentForLead(fromLeadId.value) : 0
+  if (approved && !discount.value) discount.value = approved
+})
+
+const approvedPercent = computed(() => (fromLeadId.value ? approvals.approvedPercentForLead(fromLeadId.value) : 0))
+const discountNeedsApproval = computed(() => discount.value > approvedPercent.value && approvals.needsApproval(discount.value))
+const needsApproval = computed(() => discountNeedsApproval.value || dealType.value === 'barter' || dealType.value === 'pledge')
 
 const createdContract = ref<Awaited<ReturnType<typeof dealsStore.createContract>> | null>(null)
 
@@ -100,7 +108,7 @@ function reset() {
 </script>
 
 <template>
-  <div class="mx-auto flex max-w-3xl flex-col gap-6">
+  <div class="mx-auto flex w-full flex-col gap-6" :class="step === 0 ? 'max-w-[1180px]' : 'max-w-3xl'">
     <div>
       <h1 class="text-[22px] font-semibold tracking-[-0.025em]">Мастер сделок</h1>
       <p class="mt-1 text-[13px] text-muted">От выбора объекта до договора и графика — в одной транзакции</p>
@@ -109,27 +117,28 @@ function reset() {
     <StepsHeader :steps="steps" :current="step" />
 
     <!-- Шаг 1: объект -->
-    <AppCard v-if="step === 0" title="Выберите объект">
-      <AppInput v-model="unitSearch" placeholder="Поиск по номеру" icon="ph:magnifying-glass" class="mb-3.5" />
-      <div class="max-h-[380px] overflow-y-auto rounded-xl2 border border-line">
-        <button
-          v-for="u in pickableUnits" :key="u.id" type="button"
-          class="flex w-full items-center justify-between border-b border-line px-3.5 py-2.5 text-left last:border-0 hover:bg-soft"
-          :class="selectedUnitId === u.id ? 'bg-plum-soft' : ''"
-          @click="selectedUnitId = u.id"
-        >
-          <span class="flex items-center gap-2.5">
-            <Icon :name="UNIT_KIND_META[u.kind].icon" size="16" class="text-muted" />
-            <span class="text-[13.5px] font-semibold">№ {{ u.number }}</span>
-            <span class="text-[12.5px] text-muted">{{ fmtArea(u.area) }} · {{ u.rooms || '—' }} комн.</span>
-          </span>
-          <span class="flex items-center gap-2">
-            <StatusTag v-if="u.status === 'reserved'" tone="warn" size="sm">Бронь</StatusTag>
-            <span class="tabular text-[13px] font-semibold">{{ money(u.price) }}</span>
-          </span>
-        </button>
-        <EmptyState v-if="!pickableUnits.length" compact icon="ph:magnifying-glass" title="Не найдено" />
+    <AppCard v-if="step === 0" title="Выберите объект" subtitle="Шахматка, фасад, план этажа и список — тот же подбор, что в карточке заявки">
+      <div
+        v-if="selectedUnit"
+        class="mb-3.5 flex flex-wrap items-center gap-3 rounded-xl2 border border-plum bg-plum-soft/40 px-3.5 py-2.5"
+      >
+        <Icon :name="UNIT_KIND_META[selectedUnit.kind].icon" size="18" class="shrink-0 text-plum" />
+        <div class="min-w-0 flex-1">
+          <p class="text-[13.5px] font-semibold text-ink">
+            № {{ selectedUnit.number }}
+            <span class="font-normal text-muted">
+              · {{ unitsStore.building(selectedUnit.buildingId)?.name }} · эт. {{ selectedUnit.floor }}
+              · {{ selectedUnit.rooms || '—' }} комн. · {{ fmtArea(selectedUnit.area) }}
+            </span>
+          </p>
+          <p v-if="selectedUnit.status === 'reserved'" class="text-[11.5px] text-warn">Объект под бронью — договор снимет её автоматически</p>
+        </div>
+        <span class="tabular shrink-0 text-[15px] font-semibold text-ink">{{ money(selectedUnit.price) }}</span>
+        <AppButton size="sm" icon="ph:x" @click="selectedUnitId = ''">Сбросить</AppButton>
       </div>
+
+      <UnitPicker :scope-key="pickerScope" :lead-id="fromLeadId || undefined" @open="selectedUnitId = $event" />
+
       <div class="mt-4 flex justify-end"><AppButton variant="primary" icon-right="ph:arrow-right" @click="next">Далее</AppButton></div>
     </AppCard>
 
@@ -181,9 +190,18 @@ function reset() {
         <div class="mt-1.5 flex items-center justify-between border-t border-line pt-1.5 text-[15px] font-semibold"><span>Итого</span><span class="tabular">{{ money(finalPrice) }}</span></div>
       </div>
 
+      <p v-if="approvedPercent" class="mt-3.5 flex items-start gap-2 rounded-xl2 border-l-4 border-ok bg-ok-bg px-3.5 py-2.5 text-[12.5px] text-ok">
+        <Icon name="ph:seal-check" size="16" class="mt-0.5 shrink-0" />
+        Скидка {{ approvedPercent }}% уже согласована по заявке — подставлена в расчёт.
+      </p>
       <p v-if="needsApproval" class="mt-3.5 flex items-start gap-2 rounded-xl2 border-l-4 border-warn bg-warn-bg px-3.5 py-2.5 text-[12.5px] text-warn">
         <Icon name="ph:seal-warning" size="16" class="mt-0.5 shrink-0" />
-        Скидка выше лимита или нестандартный тип сделки — договор уйдёт на согласование контролёру и директору перед активацией.
+        <span v-if="discountNeedsApproval">
+          Скидка {{ discount }}% выше согласованной — договор уйдёт на согласование
+          ({{ ['Руководитель', ...(approvals.routeFor(discount).includes('director') ? ['Директор'] : [])].join(' → ') }})
+          перед активацией.
+        </span>
+        <span v-else>Нестандартный тип сделки — договор уйдёт на согласование перед активацией.</span>
       </p>
 
       <div class="mt-4 flex justify-between">

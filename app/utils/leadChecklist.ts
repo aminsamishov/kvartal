@@ -71,7 +71,7 @@ export function buildDealChecklist(input: {
       hint: 'Оформите договор из брони',
     },
     {
-      key: 'first_payment', label: 'Первый платёж', icon: 'ph:hand-coins',
+      key: 'first_payment', label: 'Платёж', icon: 'ph:hand-coins',
       done: Boolean(firstPaid), at: firstPaid?.date,
       hint: 'Проведите и подтвердите первый взнос',
     },

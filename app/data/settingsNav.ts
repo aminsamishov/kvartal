@@ -14,5 +14,6 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
   { slug: 'statuses', label: 'Статусы', icon: 'ph:flag', group: 'Продажи' },
   { slug: 'calculator', label: 'Калькулятор условий покупки', icon: 'ph:calculator', group: 'Продажи' },
   { slug: 'deal-settings', label: 'Настройки Мастера сделок', icon: 'ph:magic-wand', group: 'Процессы' },
+  { slug: 'automations', label: 'Автоматизации', icon: 'ph:lightning', group: 'Процессы' },
   { slug: 'account', label: 'Настройки аккаунта', icon: 'ph:buildings', group: 'Аккаунт' },
 ]

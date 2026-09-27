@@ -625,6 +625,43 @@ function build() {
     }
   }
 
+  // --- связь договоров с заявками ---
+  // Без leadId договор не знает, из какой заявки он вырос: не посчитать ни
+  // средний цикл сделки, ни продажи по менеджерам, ни источник продажи.
+  // Поэтому заявки на этапе «Сделка» привязываем к реальным договорам, а дату
+  // заявки сдвигаем перед подписанием — цикл считается от неё.
+  const dealLeads = leads.filter((l) => l.stage === 'deal')
+  const freeContracts = contracts.filter((c) => !c.leadId)
+  dealLeads.forEach((lead, i) => {
+    const own = freeContracts.findIndex((c) => c.clientId === lead.clientId)
+    const idx = own >= 0 ? own : i
+    const contract = freeContracts[idx]
+    if (!contract) return
+    freeContracts.splice(idx, 1)
+    contract.leadId = lead.id
+    contract.clientId = lead.clientId
+
+    const signed = contract.signedAt ?? contract.createdAt
+    lead.createdAt = addDays(signed, -rInt(rng, 12, 75))
+    lead.stageSince = signed
+    const created = lead.history.find((e) => e.kind === 'created')
+    if (created) created.at = lead.createdAt
+
+    // бронь, которая стала договором: конверсия «бронь → договор» считается
+    // именно по таким записям
+    if (rBool(rng, 0.7)) {
+      const unitId = contract.unitIds[0]
+      if (unitId) {
+        const createdAt = addDays(signed, -rInt(rng, 2, 20))
+        reservations.push({
+          id: `res-conv-${i + 1}`, unitId, clientId: lead.clientId, leadId: lead.id,
+          kind: 'with_deposit', deposit: 150000, createdAt, expiresAt: addDays(createdAt, 30),
+          status: 'converted', createdBy: lead.assignedTo,
+        })
+      }
+    }
+  })
+
   // --- прайс-листы ---
   const priceDrafts: PriceDraft[] = [
     {
