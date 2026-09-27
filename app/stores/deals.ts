@@ -4,6 +4,7 @@ import type { Contract, DealType, Payment, ScheduleItem } from '~/types/models'
 import { TODAY } from '~/data/seed'
 import { useUnitsStore } from './units'
 import { useSalesStore } from './sales'
+import { useMiscStore } from './misc'
 
 export interface ContractBalance {
   price: number
@@ -111,6 +112,14 @@ export const useDealsStore = defineStore('deals', {
         const lead = salesStore.lead(input.leadId)
         if (lead && lead.stage !== 'deal') salesStore.moveLead(input.leadId, 'deal', 'Система')
       }
+
+      // Автоматизация: договор подписан — график создан, первый платёж уже
+      // ждёт кассира. Уведомление закрывает разрыв между продажей и финансами.
+      useMiscStore().notify({
+        key: `auto-contract-${contract.id}`,
+        text: `Договор ${contract.number}: создан график на ${items.length} платеж(ей), первый — ${new Date(items[0]!.dueDate).toLocaleDateString('ru-RU')}`,
+        kind: contract.status === 'pending_approval' ? 'approval' : 'system',
+      })
 
       return contract
     },

@@ -18,6 +18,26 @@ export const useSettingsStore = defineStore('settings', {
       requireClientFields: ['ФИО', 'Телефон', 'Паспорт'] as string[],
       requireRepFields: ['ФИО', 'Доверенность'] as string[],
     },
+    /**
+     * Бизнес-правила, которые система выполняет сама. Выключатели нужны:
+     * в разных отделах продаж часть правил мешает, а хардкод не отключишь.
+     */
+    automations: {
+      leadTask: true,
+      visitFollowUp: true,
+      reservationExpiry: true,
+      contractSchedule: true,
+      overdueAlert: true,
+    },
+    /**
+     * Лимиты скидки по ролям, %. Скидка до лимита менеджера применяется без
+     * согласования, выше — идёт руководителю, ещё выше — директору.
+     */
+    discountLimits: {
+      manager: 3,
+      head: 7,
+      director: 15,
+    },
     reservationSettings: {
       noDepositDays: 1,
       confirmedDays: 3,

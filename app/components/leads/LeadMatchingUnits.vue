@@ -3,21 +3,22 @@ import type { Lead } from '~/types/models'
 import { matchUnits, interestFromLead } from '~/composables/useLeadMatching'
 import { money } from '~/utils/format'
 
-const props = defineProps<{ lead: Lead }>()
-const emit = defineEmits<{ compare: [string[]] }>()
+/**
+ * Компактный подбор на «Обзоре»: что клиент уже смотрит и три лучших
+ * совпадения. Полный подбор с шахматкой, фасадом и планом этажа живёт на
+ * вкладке «Подбор» — здесь он должен помещаться в один экран.
+ */
+const props = defineProps<{ lead: Lead; limit?: number }>()
+const emit = defineEmits<{ picker: []; open: [string] }>()
 
 const unitsStore = useUnitsStore()
 const salesStore = useSalesStore()
-const ui = useUiStore()
 
-const includeReserved = ref(false)
-const limit = ref(4)
 const reserveFor = ref<string | null>(null)
-const compare = ref<string[]>([])
 
 const interest = computed(() => interestFromLead(props.lead))
-const matches = computed(() => matchUnits(unitsStore.units, interest.value, { includeReserved: includeReserved.value }))
-const shown = computed(() => matches.value.slice(0, limit.value))
+const matches = computed(() => matchUnits(unitsStore.units, interest.value, { includeReserved: false }))
+const shown = computed(() => matches.value.slice(0, props.limit ?? 3))
 
 // уже привязанные к заявке объекты показываем отдельно наверху
 const linked = computed(() => props.lead.interestedUnitIds
@@ -30,12 +31,6 @@ const priceRange = computed(() => {
   return { min: Math.min(...prices), max: Math.max(...prices) }
 })
 
-function toggleCompare(unitId: string) {
-  if (compare.value.includes(unitId)) compare.value = compare.value.filter((id) => id !== unitId)
-  else if (compare.value.length >= 4) ui.toast('Можно сравнить до 4 квартир', 'warn')
-  else compare.value = [...compare.value, unitId]
-}
-
 function unlink(unitId: string) {
   salesStore.toggleLeadUnit(props.lead.id, unitId)
 }
@@ -45,15 +40,10 @@ function unlink(unitId: string) {
   <AppCard id="sec-match" :padded="false">
     <div class="flex flex-wrap items-center justify-between gap-2 px-4 pt-4">
       <h3 class="text-[13px] font-semibold uppercase tracking-[0.04em] text-muted">
-        Подходящие квартиры
+        Подбор
         <span class="tabular ml-1 rounded-full bg-soft px-1.5 py-0.5 text-[11px] text-ink">{{ matches.length }}</span>
       </h3>
-      <div class="flex items-center gap-2">
-        <AppSwitch v-model="includeReserved" label="С бронью" />
-        <AppButton size="sm" icon="ph:arrows-left-right" :disabled="compare.length < 2" @click="emit('compare', compare)">
-          Сравнить{{ compare.length ? ` · ${compare.length}` : '' }}
-        </AppButton>
-      </div>
+      <AppButton size="sm" icon="ph:grid-nine" @click="emit('picker')">Открыть подбор</AppButton>
     </div>
 
     <div class="p-4">
@@ -66,7 +56,7 @@ function unlink(unitId: string) {
             class="flex items-center gap-1.5 rounded-full border border-plum bg-plum-soft px-2.5 py-1 text-[11.5px] font-medium text-plum"
           >
             № {{ u.number }} · {{ money(u.price) }}
-            <button class="hover:text-bad" title="Убрать" @click="unlink(u.id)"><Icon name="ph:x" size="11" /></button>
+            <button class="hover:text-bad" title="Убрать из подборки" @click="unlink(u.id)"><Icon name="ph:x" size="11" /></button>
           </span>
         </div>
       </div>
@@ -78,9 +68,9 @@ function unlink(unitId: string) {
       <div v-if="shown.length" class="flex flex-col gap-2">
         <template v-for="m in shown" :key="m.unit.id">
           <LeadUnitRow
-            :unit="m.unit" :score="m.score" :misses="m.misses"
-            :compare-on="compare.includes(m.unit.id)"
-            @reserve="reserveFor = $event" @compare="toggleCompare"
+            :unit="m.unit" :score="m.score" :misses="m.misses" :factors="m.factors"
+            :linked="lead.interestedUnitIds.includes(m.unit.id)"
+            @reserve="reserveFor = $event" @open="emit('open', $event)"
           />
           <ReserveComposer
             v-if="reserveFor === m.unit.id"
@@ -90,11 +80,11 @@ function unlink(unitId: string) {
         </template>
 
         <button
-          v-if="matches.length > limit" type="button"
+          v-if="matches.length > shown.length" type="button"
           class="focus-ring rounded-xl2 border border-dashed border-line py-2 text-[12px] font-medium text-muted hover:border-plum hover:text-plum"
-          @click="limit += 6"
+          @click="emit('picker')"
         >
-          Показать ещё {{ Math.min(6, matches.length - limit) }} из {{ matches.length - limit }}
+          Ещё {{ matches.length - shown.length }} подходящих — открыть подбор
         </button>
       </div>
 

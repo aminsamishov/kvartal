@@ -6,11 +6,17 @@ const dealsStore = useDealsStore()
 const pricingStore = usePricingStore()
 const settingsStore = useSettingsStore()
 const miscStore = useMiscStore()
+const approvalsStore = useApprovalsStore()
 
 await Promise.all([
   unitsStore.load(), salesStore.load(), dealsStore.load(),
-  pricingStore.load(), settingsStore.load(), miscStore.load(),
+  pricingStore.load(), settingsStore.load(), miscStore.load(), approvalsStore.load(),
 ])
+
+// Автоматизации гоняем после загрузки данных: истёкшие брони, напоминания
+// после показа и просрочки по графику не должны ждать, пока менеджер
+// откроет нужный раздел.
+runAutomations()
 </script>
 
 <template>

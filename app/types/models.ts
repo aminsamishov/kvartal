@@ -342,6 +342,42 @@ export interface Lead {
   nextAt?: string
 }
 
+/* ------------------------- согласование скидок --------------------------- */
+
+export type ApprovalRole = 'manager' | 'head' | 'director'
+export type ApprovalDecision = 'pending' | 'approved' | 'rejected'
+
+/** Одно решение в маршруте согласования. История решений — это список таких шагов. */
+export interface ApprovalStep {
+  role: ApprovalRole
+  decision: ApprovalDecision
+  decidedBy?: string
+  decidedAt?: string
+  comment?: string
+}
+
+/**
+ * Запрос на скидку. Скидка выше лимита менеджера не применяется молча:
+ * она идёт по маршруту Менеджер → Руководитель → Директор, и каждый шаг
+ * остаётся в истории — иначе на вопрос «кто разрешил −12%» ответа нет.
+ */
+export interface DiscountRequest {
+  id: string
+  leadId?: string
+  clientId: string
+  unitId?: string
+  contractId?: string
+  basePrice: number
+  percent: number
+  amount: number
+  reason: string
+  requestedBy: string
+  requestedById: string
+  requestedAt: string
+  status: ApprovalDecision
+  steps: ApprovalStep[]
+}
+
 export interface Reservation {
   id: string
   unitId: string

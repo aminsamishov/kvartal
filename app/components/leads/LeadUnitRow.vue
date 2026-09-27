@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import type { Unit } from '~/types/models'
+import type { MatchFactor } from '~/composables/useLeadMatching'
+import { scoreTone } from '~/composables/useLeadMatching'
 import { UNIT_STATUS_META } from '~/utils/meta'
 import { area as fmtArea, money } from '~/utils/format'
 import { explicationTotals } from '~/utils/explication'
@@ -10,10 +12,18 @@ const props = defineProps<{
   unit: Unit
   score?: number
   misses?: string[]
-  compareOn?: boolean
+  /** разбивка совпадения по критериям — раскрывается по клику на процент */
+  factors?: MatchFactor[]
   busy?: boolean
+  /**
+   * Привязана ли квартира к подборке клиента. undefined — строка вне контекста
+   * заявки: тогда действие кнопки «открыть карточку», а не «в подборку».
+   */
+  linked?: boolean
 }>()
-const emit = defineEmits<{ reserve: [string]; compare: [string] }>()
+const emit = defineEmits<{ reserve: [string]; open: [string] }>()
+
+const showFactors = ref(false)
 
 const unitsStore = useUnitsStore()
 const expanded = ref(false)
@@ -47,7 +57,13 @@ const canReserve = computed(() => props.unit.status === 'free')
         <div class="flex items-center gap-2">
           <p class="tabular truncate text-[13.5px] font-semibold text-ink">№ {{ unit.number }}</p>
           <StatusTag :tone="UNIT_STATUS_META[unit.status].tone" size="sm" dot>{{ UNIT_STATUS_META[unit.status].label }}</StatusTag>
-          <span v-if="score !== undefined && score >= 95" class="rounded bg-ok-bg px-1.5 py-0.5 text-[10.5px] font-bold text-ok">Точное совпадение</span>
+          <button
+            v-if="score !== undefined" type="button"
+            class="focus-ring ml-auto shrink-0 rounded px-1.5 py-0.5 text-[10.5px] font-bold"
+            :class="{ ok: 'bg-ok-bg text-ok', warn: 'bg-warn-bg text-warn', neutral: 'bg-soft text-muted' }[scoreTone(score)]"
+            :title="factors?.length ? 'Показать разбор совпадения' : undefined"
+            @click="showFactors = !showFactors"
+          >{{ score }}%</button>
         </div>
         <p class="mt-0.5 truncate text-[12px] text-muted">
           {{ building?.name }} · эт. {{ unit.floor }} · {{ unit.rooms || '—' }} комн. · {{ fmtArea(unit.area) }}
@@ -56,8 +72,17 @@ const canReserve = computed(() => props.unit.status === 'free')
           <span class="tabular text-[14px] font-semibold text-ink">{{ money(unit.price) }}</span>
           <span class="tabular text-[11.5px] text-muted">{{ money(perM2) }}/м²</span>
         </p>
-        <div v-if="misses?.length" class="mt-1 flex flex-wrap gap-1">
+        <div v-if="misses?.length && !showFactors" class="mt-1 flex flex-wrap gap-1">
           <span v-for="m in misses" :key="m" class="rounded bg-warn-bg px-1.5 py-0.5 text-[10.5px] font-medium text-warn">{{ m }}</span>
+        </div>
+
+        <!-- разбор совпадения: видно, какой критерий и на сколько снял балл -->
+        <div v-if="showFactors && factors?.length" class="mt-1.5 flex flex-col gap-0.5 rounded-lg bg-soft px-2 py-1.5">
+          <p v-for="f in factors" :key="f.key" class="flex items-center gap-1.5 text-[11px]">
+            <Icon :name="f.ok ? 'ph:check-circle-fill' : 'ph:minus-circle-fill'" size="11" :class="f.ok ? 'text-ok' : 'text-warn'" />
+            <span class="min-w-0 flex-1 truncate text-muted">{{ f.detail }}</span>
+            <span v-if="f.penalty" class="tabular shrink-0 font-semibold text-warn">−{{ f.penalty }}</span>
+          </p>
         </div>
       </div>
 
@@ -67,10 +92,16 @@ const canReserve = computed(() => props.unit.status === 'free')
         </AppButton>
         <div class="flex gap-1.5">
           <button
-            type="button" class="focus-ring grid h-8 w-8 place-items-center rounded-xl2 border transition-colors"
-            :class="compareOn ? 'border-ink bg-ink text-panel' : 'border-line text-muted hover:text-ink'"
-            title="Добавить к сравнению" @click="emit('compare', unit.id)"
-          ><Icon name="ph:arrows-left-right" size="14" /></button>
+            type="button"
+            class="focus-ring grid h-8 w-8 place-items-center rounded-xl2 border transition-colors"
+            :class="linked ? 'border-plum bg-plum-soft text-plum' : 'border-line text-muted hover:text-ink'"
+            :title="linked === undefined
+              ? 'Открыть карточку помещения'
+              : linked ? 'Убрать из подборки клиента' : 'Добавить в подборку клиента'"
+            @click="emit('open', unit.id)"
+          >
+            <Icon :name="linked === undefined ? 'ph:arrow-square-out' : linked ? 'ph:minus-bold' : 'ph:plus-bold'" size="14" />
+          </button>
           <AppButton
             size="sm" variant="primary" icon="ph:bookmark-simple" :disabled="!canReserve || busy"
             :title="canReserve ? 'Забронировать' : 'Объект недоступен'" @click="emit('reserve', unit.id)"

@@ -49,6 +49,14 @@ export const useMiscStore = defineStore('misc', {
       this.log('Документы', `Сформирован «${doc.templateName}»${doc.contractNumber ? ` по договору ${doc.contractNumber}` : ''}`, doc.createdBy)
       return doc
     },
+    /**
+     * Уведомление от автоматизации. Ключ детерминированный, поэтому повторный
+     * прогон правил не плодит одинаковые строки в колокольчике.
+     */
+    notify(input: { key: string; text: string; kind: NotificationItem['kind'] }) {
+      if (this.notifications.some((n) => n.id === input.key)) return
+      this.notifications.unshift({ id: input.key, text: input.text, kind: input.kind, at: new Date().toISOString(), read: false })
+    },
     markRead(id: string) {
       const n = this.notifications.find((x) => x.id === id)
       if (n) n.read = true

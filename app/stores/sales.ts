@@ -3,6 +3,7 @@ import { uid } from '~/repositories/api'
 import type { Client, ClientDocument, CommKind, CommOutcome, DocKind, Lead, LeadComm, LeadEvent, LeadInterest, LeadNote, LeadPriority, LeadStage, LeadTask, LeadTaskKind, Reservation, ReservationKind } from '~/types/models'
 import { TODAY } from '~/data/seed'
 import { useUnitsStore } from './units'
+import { useSettingsStore } from './settings'
 
 const LEAD_STAGE_LABELS: Record<LeadStage, string> = {
   new: 'Новая', contacted: 'Связались', visit: 'Показ', reserved: 'Бронь', deal: 'Сделка', lost: 'Отказ',
@@ -174,12 +175,36 @@ export const useSalesStore = defineStore('sales', {
      */
     expireReservations(now = new Date()) {
       const expired = this.reservations.filter((r) => r.status === 'active' && new Date(r.expiresAt) < now)
+      const unitsStore = useUnitsStore()
       for (const r of expired) {
         r.status = 'expired'
-        const unitsStore = useUnitsStore()
         const offered = unitsStore.offerToNextInQueue(r.unitId)
-        if (!offered) unitsStore.setStatus(r.unitId, 'free')
-        if (r.leadId) this.logLead(r.leadId, 'field', 'Бронь истекла — объект освобождён', 'Система')
+        if (!offered) {
+          unitsStore.setStatus(r.unitId, 'free')
+        } else if (useSettingsStore().reservationSettings.autoQueueTransfer && offered.clientId) {
+          // Очередь имеет смысл только если она двигается сама: следующему
+          // интересанту сразу оформляется короткая бронь без задатка, иначе
+          // объект просто «висит забронированным» на неизвестного человека.
+          const lead = this.leads.find((l) => l.clientId === offered.clientId
+            && l.stage !== 'lost' && l.stage !== 'deal')
+          const nowIso = now.toISOString()
+          const handoff: Reservation = {
+            id: uid('res'), unitId: r.unitId, clientId: offered.clientId, leadId: lead?.id,
+            kind: 'no_deposit', deposit: 0, createdAt: nowIso,
+            expiresAt: new Date(now.getTime() + 86400000).toISOString(),
+            status: 'active', createdBy: 'Автоматизация',
+          }
+          this.reservations.push(handoff)
+          void repo.createReservation(handoff)
+          const unit = unitsStore.unit(r.unitId)
+          if (unit) unit.reservationId = handoff.id
+          if (lead) this.logLead(lead.id, 'field', `Освободившаяся квартира предложена из очереди${unit ? `: № ${unit.number}` : ''}`, 'Автоматизация')
+        }
+        if (r.leadId) {
+          this.logLead(r.leadId, 'field', offered
+            ? 'Бронь истекла — объект ушёл следующему в очереди'
+            : 'Бронь истекла — объект освобождён', 'Система')
+        }
       }
       return expired.length
     },
@@ -306,6 +331,18 @@ export const useSalesStore = defineStore('sales', {
       lead.lastContactAt = task.doneAt
       this.syncNextAction(lead)
       this.logLead(leadId, 'task_done', `Задача выполнена: ${task.title}${result ? ` — ${result}` : ''}`, author)
+
+      // Автоматизация: после показа клиенту перезванивают на следующий день.
+      // Вручную этот шаг ставят через раз — и именно здесь сделки зависают.
+      if (task.kind === 'visit' && useSettingsStore().automations.visitFollowUp
+        && lead.stage !== 'deal' && lead.stage !== 'lost') {
+        this.addLeadTask(leadId, {
+          kind: 'call',
+          title: 'Узнать впечатления после показа',
+          dueAt: new Date(Date.now() + 86400000).toISOString(),
+          assignedTo: task.assignedTo || lead.assignedTo,
+        }, 'Автоматизация')
+      }
     },
 
     removeLeadTask(leadId: string, taskId: string) {
@@ -345,6 +382,19 @@ export const useSalesStore = defineStore('sales', {
         history: [{ id: uid('ev'), kind: 'created', text: `Заявка создана из источника «${data.source}»`, author, at: now }],
       }
       this.leads.unshift(lead)
+
+      // Автоматизация: заявка без задачи — главная причина, по которой клиенты
+      // теряются между этапами. Первый шаг ставим сразу, откуда бы заявка ни
+      // пришла: с формы менеджера, из мастера сделок или с сайта.
+      if (useSettingsStore().automations.leadTask) {
+        this.addLeadTask(lead.id, {
+          kind: 'call',
+          title: 'Первый звонок клиенту',
+          dueAt: new Date(Date.now() + 86400000).toISOString(),
+          assignedTo: data.assignedTo,
+        }, 'Автоматизация')
+      }
+
       return lead
     },
 

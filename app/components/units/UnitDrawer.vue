@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { ExplicationRoom, ReservationKind } from '~/types/models'
+import type { ExplicationRoom, ReservationKind, UnitStatus } from '~/types/models'
 import { UNIT_KIND_META, UNIT_STATUS_META, RESERVATION_KIND_META, UNIT_BOARD_COLOR } from '~/utils/meta'
 import { area as fmtArea, fmtDate, fmtPhone, money } from '~/utils/format'
 import { fileToObjectUrl, pickFiles } from '~/composables/useFileUpload'
@@ -23,7 +23,6 @@ const project = computed(() => (unit.value ? unitsStore.project(unit.value.proje
 const building = computed(() => (unit.value ? unitsStore.building(unit.value.buildingId) : undefined))
 const reservation = computed(() => (unit.value ? salesStore.reservationForUnit(unit.value.id) : undefined))
 const client = computed(() => (reservation.value ? salesStore.client(reservation.value.clientId) : undefined))
-const queue = computed(() => (unit.value ? unitsStore.queueFor(unit.value.id) : []))
 const preset = computed(() => (unit.value?.layoutPresetId ? building.value?.unitTypePresets.find((p) => p.id === unit.value!.layoutPresetId) : undefined))
 const displayImage = computed(() => unit.value?.imageUrl || preset.value?.imageUrl || null)
 
@@ -169,14 +168,12 @@ function uname(u: NonNullable<typeof unit.value>) {
   return `№ ${u.number}`
 }
 
-const queueName = ref('')
-const queuePhone = ref('')
-async function addQueue() {
-  if (!unit.value || !queueName.value.trim()) return
-  await unitsStore.addToQueue(unit.value.id, queueName.value, queuePhone.value)
-  queueName.value = ''
-  queuePhone.value = ''
-  ui.toast('Добавлено в очередь', 'ok')
+/** Снять с продажи и вернуть обратно — самая частая правка на шахматке. */
+function setStatus(status: UnitStatus) {
+  if (!unit.value || unit.value.status === status || unit.value.status === 'reserved') return
+  unitsStore.setStatus(unit.value.id, status, auth.user?.name ?? 'Система')
+  misc.log('Шахматка', `№ ${unit.value.number}: статус «${UNIT_STATUS_META[status].label}»`, auth.user?.name ?? '')
+  ui.toast(`Статус: ${UNIT_STATUS_META[status].label}`, 'ok')
 }
 </script>
 
@@ -332,6 +329,17 @@ async function addQueue() {
 
       <div class="my-4 border-t border-line" />
 
+      <!-- быстрая смена статуса: снять с продажи и вернуть обратно -->
+      <div v-if="!unit.contractId" class="mb-3 flex flex-wrap items-center gap-2">
+        <span class="text-[11px] font-semibold uppercase tracking-[0.04em] text-muted">Статус</span>
+        <Chip
+          v-for="st in (['free', 'closed'] as const)" :key="st" :pressed="unit.status === st"
+          :disabled="unit.status === 'reserved'"
+          @click="setStatus(st)"
+        >{{ UNIT_STATUS_META[st].label }}</Chip>
+        <span v-if="unit.status === 'reserved'" class="text-[11.5px] text-muted">снимите бронь, чтобы менять статус</span>
+      </div>
+
       <!-- свободно -->
       <div v-if="unit.status === 'free'">
         <AppButton v-if="!showReserveForm" variant="primary" icon="ph:bookmark-simple" block @click="showReserveForm = true">Забронировать</AppButton>
@@ -371,28 +379,13 @@ async function addQueue() {
           <AppButton variant="primary" icon="ph:file-text" @click="navigateTo(`/deals/new?unit=${unit.id}`)">В договор</AppButton>
         </div>
 
-        <div class="border-t border-line pt-3.5">
-          <p class="mb-2 flex items-center gap-1.5 text-[12.5px] font-semibold">
-            Очередь на объект <StatusTag v-if="queue.length" tone="warn" size="sm">{{ queue.length }}</StatusTag>
-          </p>
-          <p class="mb-2 text-[12px] text-muted">Если бронь снимут или она истечёт, объект автоматически уйдёт первому в очереди.</p>
-          <div v-if="queue.length" class="mb-2 flex flex-col gap-1.5">
-            <div v-for="(q, i) in queue" :key="i" class="flex items-center justify-between rounded-xl2 bg-soft px-2.5 py-1.5 text-[12.5px]">
-              <span>{{ i + 1 }}. {{ q.name }} <span class="text-muted">{{ fmtPhone(q.phone) }}</span></span>
-              <button class="text-muted hover:text-bad" @click="unitsStore.removeFromQueue(unit!.id, i)"><Icon name="ph:x" size="14" /></button>
-            </div>
-          </div>
-          <div class="flex gap-1.5">
-            <AppInput v-model="queueName" placeholder="Имя" />
-            <AppInput v-model="queuePhone" placeholder="Телефон" />
-            <AppButton icon="ph:plus" @click="addQueue" />
-          </div>
-        </div>
+        <UnitQueueCard :unit="unit" />
       </div>
 
       <!-- в рассрочке / продано -->
-      <div v-else-if="unit.contractId">
+      <div v-else-if="unit.contractId" class="flex flex-col gap-3">
         <AppButton variant="primary" icon="ph:file-text" block @click="navigateTo(`/contracts/${unit.contractId}`)">Открыть договор</AppButton>
+        <UnitQueueCard :unit="unit" />
       </div>
 
       <div v-else-if="unit.status === 'closed'">

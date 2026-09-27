@@ -1,5 +1,5 @@
 import type {
-  AuditEntry, Building, Client, Contract, DealType, ExplicationRoom, ImageZone, Lead, LeadEvent, LeadStage,
+  AuditEntry, Building, Client, Contract, DealType, DiscountRequest, ExplicationRoom, ImageZone, Lead, LeadEvent, LeadStage,
   ClientDocument, LeadComm, LeadTask, LeadTaskKind, NotificationItem,
   Payment, PriceDraft, Project, QueueEntry, Reservation, ScheduleItem, Unit, UnitKind, UnitStatus,
 } from '~/types/models'
@@ -663,8 +663,59 @@ function build() {
     { id: 'n6', text: 'Новая заявка с сайта: интерес к ЖК «Панорама»', at: addDays(TODAY, -1.4), read: true, kind: 'lead' },
   ]
 
+  // --- согласование скидок ---
+  // Маршрут Менеджер → Руководитель → Директор: в демо нужны все три состояния,
+  // иначе экран согласований выглядит пустым и логика не читается.
+  const discountRequests: DiscountRequest[] = []
+  const discountLeads = leads.filter((l) => l.stage === 'reserved' || l.stage === 'deal').slice(0, 3)
+  const discountSetups: { percent: number; reason: string; steps: DiscountRequest['steps']; status: DiscountRequest['status'] }[] = [
+    {
+      percent: 5, reason: 'Клиент готов внести 50% сразу', status: 'pending',
+      steps: [
+        { role: 'manager', decision: 'approved', decidedBy: 'Айгуль Осмонова', decidedAt: addDays(TODAY, -1), comment: 'Запрос менеджера' },
+        { role: 'head', decision: 'pending' },
+      ],
+    },
+    {
+      percent: 9, reason: 'Второй объект в семье, покупали в 2024', status: 'pending',
+      steps: [
+        { role: 'manager', decision: 'approved', decidedBy: 'Данияр Токтогулов', decidedAt: addDays(TODAY, -3), comment: 'Запрос менеджера' },
+        { role: 'head', decision: 'approved', decidedBy: 'Тимур Асанов', decidedAt: addDays(TODAY, -2), comment: 'Поддерживаю, клиент повторный' },
+        { role: 'director', decision: 'pending' },
+      ],
+    },
+    {
+      percent: 4, reason: 'Угловая квартира, висит четвёртый месяц', status: 'approved',
+      steps: [
+        { role: 'manager', decision: 'approved', decidedBy: 'Дана Абдыкадырова', decidedAt: addDays(TODAY, -9), comment: 'Запрос менеджера' },
+        { role: 'head', decision: 'approved', decidedBy: 'Тимур Асанов', decidedAt: addDays(TODAY, -8), comment: 'Согласовано' },
+      ],
+    },
+  ]
+  discountLeads.forEach((lead, i) => {
+    const setup = discountSetups[i]
+    if (!setup) return
+    const unit = units.find((u) => u.id === lead.interestedUnitIds[0]) ?? units.find((u) => u.status === 'reserved')
+    const basePrice = unit?.price ?? lead.budget
+    discountRequests.push({
+      id: `dr-${i + 1}`,
+      leadId: lead.id,
+      clientId: lead.clientId,
+      unitId: unit?.id,
+      basePrice,
+      percent: setup.percent,
+      amount: Math.round(basePrice * (setup.percent / 100)),
+      reason: setup.reason,
+      requestedBy: managerNames[lead.assignedTo] ?? 'Менеджер',
+      requestedById: lead.assignedTo,
+      requestedAt: setup.steps[0]?.decidedAt ?? addDays(TODAY, -1),
+      status: setup.status,
+      steps: setup.steps,
+    })
+  })
+
   void AGENT_NAMES
-  return { units, clients, leads, reservations, queue, contracts, scheduleItems, payments, priceDrafts, audit, notifications, documents }
+  return { units, clients, leads, reservations, queue, contracts, scheduleItems, payments, priceDrafts, audit, notifications, documents, discountRequests }
 }
 
 const seed = build()
@@ -681,3 +732,4 @@ export const PAYMENTS = seed.payments
 export const PRICE_DRAFTS = seed.priceDrafts
 export const AUDIT = seed.audit
 export const NOTIFICATIONS = seed.notifications
+export const DISCOUNT_REQUESTS = seed.discountRequests

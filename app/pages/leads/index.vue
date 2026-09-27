@@ -150,12 +150,8 @@ async function submitCreate() {
     clientId: client.id, channel: form.channel, source: form.source,
     assignedTo: form.assignedTo, budget: form.budget, priority: form.priority, tags: [...form.tags],
   }, author.value)
-  // первый шаг ставим сразу: заявка без задачи — главная причина, почему
-  // клиенты теряются между этапами
-  salesStore.addLeadTask(lead.id, {
-    kind: 'call', title: 'Первый звонок клиенту',
-    dueAt: new Date(Date.now() + 86400000).toISOString(), assignedTo: form.assignedTo,
-  }, author.value)
+  // задачу «Первый звонок» ставит автоматизация в сторе — здесь её дублировать
+  // не нужно, иначе у заявки появляются две одинаковые задачи
   misc.log('Заявки', `Новая заявка: ${form.name}`, author.value)
   ui.toast(existing ? 'Заявка создана для существующего клиента' : 'Заявка и клиент созданы', 'ok')
   createOpen.value = false
