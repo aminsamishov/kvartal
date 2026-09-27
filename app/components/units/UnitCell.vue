@@ -9,8 +9,12 @@ const props = defineProps<{
   large?: boolean
   mode: 'status' | 'payment'
   highlighted?: boolean
+  /** входит в текущее выделение — общее для шахматки, фасада и плана этажа */
+  selected?: boolean
+  /** процент совпадения с запросом клиента, когда подбор идёт под заявку */
+  score?: number
 }>()
-const emit = defineEmits<{ click: []; hover: [MouseEvent]; move: [MouseEvent]; leave: [] }>()
+const emit = defineEmits<{ click: [MouseEvent]; hover: [MouseEvent]; move: [MouseEvent]; leave: [] }>()
 
 const dealsStore = useDealsStore()
 const settingsStore = useSettingsStore()
@@ -46,9 +50,9 @@ const visual = computed(() => (props.mode === 'payment' ? paymentModeClasses.val
       visual.bg, visual.border, visual.text,
       dim ? 'opacity-25 saturate-0 hover:translate-y-0 hover:shadow-none' : '',
       large ? 'h-[92px] w-[132px] p-2.5' : 'h-[58px] w-[66px] p-1.5',
-      highlighted && !dim ? 'ring-2 ring-plum ring-offset-1 ring-offset-bg' : '',
+      selected ? 'ring-2 ring-ink ring-offset-1 ring-offset-bg' : highlighted && !dim ? 'ring-2 ring-plum ring-offset-1 ring-offset-bg' : '',
     ]"
-    @click="emit('click')"
+    @click="emit('click', $event)"
     @mouseenter="emit('hover', $event)"
     @mousemove="emit('move', $event)"
     @mouseleave="emit('leave')"
@@ -62,7 +66,19 @@ const visual = computed(() => (props.mode === 'payment' ? paymentModeClasses.val
     <span v-else-if="mode === 'status' && health === 'bad'" class="absolute right-1.5 top-1.5 h-[7px] w-[7px] rounded-full bg-board-bad ring-2 ring-white/80" title="Просрочка платежа" />
     <Icon v-if="unit.keysIssued" name="ph:key-fill" size="11" class="absolute bottom-1.5 right-1.5 opacity-70" />
 
-    <span class="flex items-start justify-between gap-1">
+    <span
+      v-if="selected"
+      class="absolute -left-px -top-px grid h-4 w-4 place-items-center rounded-br-md rounded-tl-md bg-ink text-panel"
+      title="Выделено"
+    ><Icon name="ph:check-bold" size="10" /></span>
+    <span
+      v-if="score !== undefined && !dim"
+      class="absolute bottom-1 left-1 rounded px-1 text-[9px] font-bold"
+      :class="score >= 90 ? 'bg-fill-ok text-white' : score >= 70 ? 'bg-panel text-ink ring-1 ring-line' : 'bg-soft text-muted'"
+      :title="`Совпадение с запросом клиента — ${score}%`"
+    >{{ score }}%</span>
+
+    <span class="flex items-start justify-between gap-1" :class="selected ? 'pl-3.5' : ''">
       <span class="font-bold tabular leading-none" :class="large ? 'text-[15px]' : 'text-[12px]'">{{ unit.number }}</span>
       <span v-if="!large && unit.rooms" class="text-[9px] font-semibold leading-none opacity-60">{{ unit.rooms }}</span>
     </span>

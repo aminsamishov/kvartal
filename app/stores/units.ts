@@ -95,6 +95,49 @@ export const useUnitsStore = defineStore('units', {
       repo.updateUnitStatus(unitId, status)
     },
 
+    /**
+     * Массовая смена статуса. Проданное и то, что в рассрочке, не трогаем:
+     * у таких помещений есть договор, и статус меняется только через него.
+     */
+    bulkSetStatus(unitIds: string[], status: UnitStatus, author = 'Система') {
+      const changed: string[] = []
+      for (const id of unitIds) {
+        const u = this.unit(id)
+        if (!u || u.status === status) continue
+        if (u.contractId && (u.status === 'sold' || u.status === 'installment')) continue
+        this.logUnitChange(id, 'status', u.status, status, author)
+        u.status = status
+        repo.updateUnitStatus(id, status)
+        changed.push(id)
+      }
+      return changed
+    },
+
+    /**
+     * Массовое изменение цены: процентом или фиксированной суммой.
+     * basePrice тоже двигаем — иначе следующий прайс-лист посчитает скидку
+     * от старой базы.
+     */
+    bulkSetPrice(unitIds: string[], change: { mode: 'percent' | 'amount' | 'absolute'; value: number }, author = 'Система') {
+      const changed: string[] = []
+      for (const id of unitIds) {
+        const u = this.unit(id)
+        if (!u) continue
+        if (u.contractId && (u.status === 'sold' || u.status === 'installment')) continue
+        const next = change.mode === 'percent'
+          ? Math.round(u.price * (1 + change.value / 100))
+          : change.mode === 'amount'
+            ? Math.round(u.price + change.value)
+            : Math.round(change.value)
+        if (next <= 0 || next === u.price) continue
+        this.logUnitChange(id, 'price', String(u.price), String(next), author)
+        u.price = next
+        u.basePrice = next
+        changed.push(id)
+      }
+      return changed
+    },
+
     /** Журнал изменений помещения — нужен в карточке и при спорах с клиентом. */
     logUnitChange(unitId: string, kind: UnitHistoryEntry['kind'], from: string | undefined, to: string | undefined, author: string, note?: string) {
       this.unitHistory.unshift({ id: uid('uh'), unitId, at: new Date().toISOString(), author, kind, from, to, note })
