@@ -456,13 +456,19 @@ function build() {
   }
 
   // --- брони ---
+  // Срок брони считаем от более поздней из дат: зафиксированного «сегодня»
+  // и реального текущего дня. «Сегодня» в сиде закреплено ради стабильных
+  // графиков и просрочек, но бронь на сутки, посчитанная от него, к моменту
+  // открытия демо давно истекла бы — и половина этапа «Бронь» осталась бы
+  // без самой брони.
+  const reserveBase = new Date(Math.max(TODAY.getTime(), Date.now()))
   const reservations: Reservation[] = []
   const reservedUnits = units.filter((u) => u.status === 'reserved')
   reservedUnits.forEach((u, idx) => {
     const client = rPick(rng, clients)
     const kind = rWeighted(rng, [['no_deposit', 30], ['confirmed', 30], ['with_deposit', 40]] as const)
     const days = kind === 'no_deposit' ? 1 : kind === 'confirmed' ? 3 : 30
-    const createdAt = addDays(TODAY, -rInt(rng, 0, days - 1))
+    const createdAt = addDays(reserveBase, -rInt(rng, 0, days - 1))
     const id = `res-${idx + 1}`
     reservations.push({
       id, unitId: u.id, clientId: client.id, kind,
@@ -479,7 +485,7 @@ function build() {
     const n = rInt(rng, 1, 2)
     for (let i = 0; i < n; i++) {
       const client = rPick(rng, clients)
-      queue.push({ unitId: u.id, clientId: client.id, name: client.name, phone: client.phone, addedAt: addDays(TODAY, -rInt(rng, 0, 3)) })
+      queue.push({ unitId: u.id, clientId: client.id, name: client.name, phone: client.phone, addedAt: addDays(reserveBase, -rInt(rng, 0, 3)) })
     }
   })
 
@@ -689,6 +695,21 @@ function build() {
       }
     })
   }
+
+  // --- связь броней с заявками ---
+  // Заявка на этапе «Бронь» обязана иметь настоящую бронь: без этой связи
+  // карточка не покажет ни таймер, ни клиента, а чек-лист и рекомендации
+  // считают, что до брони дело не дошло.
+  const reservedLeads = leads.filter((l) => l.stage === 'reserved')
+  const freeReservations = reservations.filter((r) => r.status === 'active' && !r.leadId)
+  reservedLeads.forEach((lead, i) => {
+    const reservation = freeReservations[i]
+    if (!reservation) return
+    reservation.leadId = lead.id
+    reservation.clientId = lead.clientId
+    reservation.createdBy = lead.assignedTo
+    if (!lead.interestedUnitIds.includes(reservation.unitId)) lead.interestedUnitIds.unshift(reservation.unitId)
+  })
 
   // --- связь договоров с заявками ---
   // Без leadId договор не знает, из какой заявки он вырос: не посчитать ни
