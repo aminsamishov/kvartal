@@ -2,7 +2,7 @@
 import type { ClientProfile } from '~/utils/clientProfile'
 import { buildClientSummary } from '~/utils/clientProfile'
 import { CLIENT_ORIGIN_META, MARITAL_STATUS_META } from '~/utils/meta'
-import { area as fmtArea, fmtDate, fmtPhone, money, moneyCompact } from '~/utils/format'
+import { area as fmtArea, fmtDate, fmtPhone, money, moneyCompact, pluralRu } from '~/utils/format'
 
 /**
  * Обзор клиента: слева досье, справа деньги. Руководителю нужно за пять
@@ -38,7 +38,7 @@ const dossier = computed(() => {
 const analytics = computed(() => {
   const p = props.profile
   return [
-    { label: 'Lifetime Value', value: money(p.totals.purchases), hint: `${p.contracts.length} ${p.contracts.length === 1 ? 'договор' : 'договора'}` },
+    { label: 'Lifetime Value', value: money(p.totals.purchases), hint: `${p.contracts.length} ${pluralRu(p.contracts.length, 'договор', 'договора', 'договоров')}` },
     { label: 'Средний чек', value: money(p.totals.avgCheck), hint: 'на договор' },
     { label: 'Объектов', value: String(p.totals.unitsCount), hint: p.totals.area ? fmtArea(p.totals.area) : '—' },
     { label: 'Скидка за всё время', value: p.totals.discount ? money(p.totals.discount) : '—', hint: p.totals.purchases ? `${Math.round((p.totals.discount / (p.totals.purchases + p.totals.discount)) * 100)}% от суммы` : '' },
@@ -95,7 +95,10 @@ const analytics = computed(() => {
         </div>
       </AppCard>
 
-      <AppCard title="Деньги" :subtitle="`${profile.contracts.length} договор(а) · ${t.unitsCount} объект(ов)`">
+      <AppCard
+        title="Деньги"
+        :subtitle="`${profile.contracts.length} ${pluralRu(profile.contracts.length, 'договор', 'договора', 'договоров')} · ${t.unitsCount} ${pluralRu(t.unitsCount, 'объект', 'объекта', 'объектов')}`"
+      >
         <p class="tabular text-[26px] font-semibold leading-none tracking-[-0.03em] text-ink">{{ money(t.purchases) }}</p>
         <p class="mt-1 text-[12px] text-muted">общий объём покупок</p>
 
@@ -131,7 +134,10 @@ const analytics = computed(() => {
         </p>
       </AppCard>
 
-      <AppCard v-if="profile.projects.length" title="Где купил" :subtitle="`${profile.projects.length} проект(а)`">
+      <AppCard
+        v-if="profile.projects.length" title="Где купил"
+        :subtitle="`${profile.projects.length} ${pluralRu(profile.projects.length, 'проект', 'проекта', 'проектов')}`"
+      >
         <div class="flex flex-col gap-2">
           <div v-for="pr in profile.projects" :key="pr.id" class="flex items-center gap-2.5">
             <span class="h-2.5 w-2.5 shrink-0 rounded-full" :style="{ background: pr.accent }" />

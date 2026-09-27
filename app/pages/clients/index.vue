@@ -3,7 +3,7 @@ import * as XLSX from 'xlsx'
 import { CLIENT_COLUMNS, clientCellText, type ClientColumnKey } from '~/utils/clientColumns'
 import { emptyClientFilters, matchesClientFilters, type ClientFilterState } from '~/utils/clientFilters'
 import { CLIENT_STATUS_META } from '~/utils/clientProfile'
-import { money, moneyCompact } from '~/utils/format'
+import { money, moneyCompact, pluralRu } from '~/utils/format'
 import type { MetricItem } from '~/components/dashboard/MetricStrip.vue'
 
 definePageMeta({ breadcrumb: [{ label: 'Продажи' }, { label: 'Клиенты' }] })
@@ -98,7 +98,7 @@ const metrics = computed<MetricItem[]>(() => {
   return [
     {
       key: 'ltv', label: 'Объём покупок', hero: true, value: moneyCompact(purchases), unit: 'USD',
-      hint: `${rows.length} клиентов · ${units} объектов`,
+      hint: `${rows.length} ${pluralRu(rows.length, 'клиент', 'клиента', 'клиентов')} · ${units} ${pluralRu(units, 'объект', 'объекта', 'объектов')}`,
       meter: { pct: purchases ? Math.round((paid / purchases) * 100) : 0, caption: 'оплачено' },
     },
     { key: 'paid', label: 'Оплачено', value: moneyCompact(paid), tone: 'ok', hint: `${purchases ? Math.round((paid / purchases) * 100) : 0}% от объёма` },
