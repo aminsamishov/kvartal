@@ -169,7 +169,12 @@ function closeMini() {
 }
 function fromMini(action: 'open' | 'reserve' | 'contract' | 'link', unitId: string) {
   miniId.value = null
-  emit(action, unitId)
+  // emit с именем-объединением не проходит по перегрузкам типизированных
+  // эмитов, поэтому разводим события явно
+  if (action === 'open') emit('open', unitId)
+  else if (action === 'reserve') emit('reserve', unitId)
+  else if (action === 'contract') emit('contract', unitId)
+  else emit('link', unitId)
 }
 
 /* -------------------------------- сравнение ------------------------------- */

@@ -120,7 +120,10 @@ export function buildAgenda(src: AgendaSource, from: Date, to: Date, now = new D
     if (!inRange(item.dueDate)) continue
     const remaining = item.amount - item.paid
     const contract = src.contractOf(item.contractId)
-    if (!contract || contract.status === 'cancelled') continue
+    // в ContractStatus нет 'cancelled' — расторгнутый договор это 'terminated'.
+    // С прежним сравнением проверка не срабатывала никогда, и в повестку дня
+    // попадали платежи по расторгнутым договорам.
+    if (!contract || contract.status === 'terminated') continue
     const overdue = remaining > 0 && new Date(item.dueDate) < now
     items.push({
       id: `sch-${item.id}`,
