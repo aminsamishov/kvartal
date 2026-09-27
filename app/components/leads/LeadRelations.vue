@@ -37,7 +37,7 @@ const showUnitHistory = ref(false)
 </script>
 
 <template>
-  <AppCard id="sec-relations" :padded="false">
+  <AppCard :padded="false">
     <div class="px-4 pt-4">
       <h3 class="text-[13px] font-semibold uppercase tracking-[0.04em] text-muted">Связи</h3>
     </div>

@@ -63,7 +63,7 @@ function assignee(id: string) {
 </script>
 
 <template>
-  <AppCard id="sec-action" :padded="false">
+  <AppCard :padded="false">
     <div class="flex items-center justify-between gap-3 px-4 pt-4">
       <h3 class="text-[13px] font-semibold uppercase tracking-[0.04em] text-muted">Следующее действие</h3>
       <AppButton size="sm" icon="ph:plus" @click="showForm = !showForm">Задача</AppButton>

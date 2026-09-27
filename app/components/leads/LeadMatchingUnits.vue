@@ -37,7 +37,7 @@ function unlink(unitId: string) {
 </script>
 
 <template>
-  <AppCard id="sec-match" :padded="false">
+  <AppCard :padded="false">
     <div class="flex flex-wrap items-center justify-between gap-2 px-4 pt-4">
       <h3 class="text-[13px] font-semibold uppercase tracking-[0.04em] text-muted">
         Подбор

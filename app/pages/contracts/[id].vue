@@ -43,6 +43,17 @@ function reject() {
   ui.toast('Договор отклонён', 'bad')
 }
 
+/**
+ * Допродажа действующему покупателю: паркинг или кладовую к купленной
+ * квартире подбирают тем же виджетом, что и основную сделку. Отдельный
+ * договор оформляется мастером — чужой график от этого не пересчитывается.
+ */
+const upsellOpen = ref(false)
+function startUpsell(unitId: string) {
+  upsellOpen.value = false
+  navigateTo(`/deals/new?unit=${unitId}${contract.value?.leadId ? `&lead=${contract.value.leadId}` : ''}`)
+}
+
 const showPayForm = ref(false)
 const payAmount = ref(0)
 const payKind = ref<PaymentKind>('bank')
@@ -85,9 +96,12 @@ function generateDoc(name: string, process: string) {
           {{ units.map((u) => `№ ${u!.number}`).join(', ') }} · {{ DEAL_TYPE_META[contract.dealType] }} · создан {{ fmtDate(contract.createdAt) }}
         </p>
       </div>
-      <div v-if="contract.status === 'pending_approval'" class="flex gap-2">
-        <AppButton variant="danger" icon="ph:x" @click="reject">Отклонить</AppButton>
-        <AppButton variant="primary" icon="ph:check-bold" @click="approve">Согласовать</AppButton>
+      <div class="flex flex-wrap gap-2">
+        <AppButton icon="ph:plus-circle" @click="upsellOpen = true">Подобрать ещё объект</AppButton>
+        <template v-if="contract.status === 'pending_approval'">
+          <AppButton variant="danger" icon="ph:x" @click="reject">Отклонить</AppButton>
+          <AppButton variant="primary" icon="ph:check-bold" @click="approve">Согласовать</AppButton>
+        </template>
       </div>
     </div>
 
@@ -159,6 +173,17 @@ function generateDoc(name: string, process: string) {
         <AppButton size="sm" icon="ph:file-arrow-down" @click="generateDoc(t.name, t.process)">Сформировать</AppButton>
       </div>
     </div>
+
+    <AppModal
+      :model-value="upsellOpen" width="xl"
+      :title="`Подбор для ${client?.name ?? 'клиента'} — паркинг, кладовая или ещё квартира`"
+      @update:model-value="upsellOpen = false"
+    >
+      <p class="mb-3 text-[12.5px] text-muted">
+        Выберите объект — откроется мастер сделок с этим клиентом. Действующий договор и его график не меняются.
+      </p>
+      <UnitPicker :scope-key="`contract:${contract.id}`" :project-id="contract.projectId" @open="startUpsell" />
+    </AppModal>
 
     <AppModal v-model="showPayForm" title="Новый платёж" width="sm">
       <div class="flex flex-col gap-3.5">
