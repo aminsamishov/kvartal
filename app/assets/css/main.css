@@ -177,3 +177,14 @@ body {
 /* карточный переход между разделами */
 .page-enter-active, .page-leave-active { transition: opacity .14s ease; }
 .page-enter-from, .page-leave-to { opacity: 0; }
+
+/* Печать досье клиента. Отдельного генератора PDF в проекте нет — браузер
+   печатает в PDF сам, наша задача убрать со страницы интерфейс и оставить
+   только документ. .print-host вешается на body на время печати. */
+@media print {
+  body.print-host > *:not(#print-portal) { display: none !important; }
+  body.print-host #print-portal { display: block !important; }
+  #print-portal { position: static; }
+  @page { size: A4; margin: 14mm; }
+}
+#print-portal { display: none; }

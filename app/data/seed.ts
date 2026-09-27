@@ -1,5 +1,5 @@
 import type {
-  AuditEntry, Building, Client, Contract, DealType, DiscountRequest, ExplicationRoom, ImageZone, Lead, LeadEvent, LeadStage, UnitHistoryEntry,
+  AuditEntry, Building, Client, ClientOrigin, Contract, DealType, DiscountRequest, ExplicationRoom, ImageZone, Lead, LeadEvent, LeadStage, MaritalStatus, UnitHistoryEntry,
   ClientDocument, LeadComm, LeadTask, LeadTaskKind, NotificationItem,
   Payment, PriceDraft, Project, QueueEntry, Reservation, ScheduleItem, Unit, UnitKind, UnitStatus,
 } from '~/types/models'
@@ -272,23 +272,41 @@ function build() {
   }
 
   // --- клиенты ---
+  // Клиент — это досье покупателя, а не строка справочника: по нему печатают
+  // договор, выставляют счёт и звонят. Поэтому здесь ИНН, адрес и дата
+  // рождения, а не только имя с телефоном.
+  const STREETS = ['ул. Ахунбаева', 'ул. Байтик Баатыра', 'пр. Чуй', 'ул. Токтогула', 'мкр. Джал', 'ул. Ибраимова']
+  const MARITAL: MaritalStatus[] = ['single', 'married', 'divorced', 'widowed']
+  const CLIENT_SOURCES = ['Instagram', 'Сайт', 'Рекомендация', 'Билборд', 'Выставка недвижимости', 'Повторная покупка']
+
   const clients: Client[] = []
   const clientCount = 46
   for (let i = 1; i <= clientCount; i++) {
     const { name } = personName(rng)
+    const phoneNumber = phone(rng)
     clients.push({
-      id: `c${i}`, kind: 'person', name, phone: phone(rng),
+      id: `c${i}`, kind: 'person', name, phone: phoneNumber,
       email: rBool(rng, 0.6) ? `${name.split(' ')[1]?.toLowerCase()}${i}@mail.kg` : undefined,
-      origin: rWeighted(rng, [['own', 70], ['partner', 22], ['reassignment', 8]]),
+      origin: rWeighted(rng, [['own', 70], ['partner', 22], ['reassignment', 8]] as [ClientOrigin, number][]),
       passportMasked: `AN•••••${rInt(rng, 100, 999)}`,
       createdAt: addDays(TODAY, -rInt(rng, 5, 260)),
+      inn: `1${rInt(rng, 100000, 999999)}${rInt(rng, 10000, 99999)}`,
+      birthDate: addDays(TODAY, -rInt(rng, 22, 60) * 365 - rInt(rng, 0, 364)),
+      address: `г. Бишкек, ${rPick(rng, STREETS)}, ${rInt(rng, 1, 180)}${rBool(rng, 0.6) ? `, кв. ${rInt(rng, 1, 120)}` : ''}`,
+      maritalStatus: rPick(rng, MARITAL),
+      source: rPick(rng, CLIENT_SOURCES),
+      whatsapp: rBool(rng, 0.15) ? phone(rng) : phoneNumber,
     })
   }
   // немного корпоративных клиентов
   for (let i = 1; i <= 3; i++) {
+    const phoneNumber = phone(rng)
     clients.push({
       id: `cc${i}`, kind: 'company', name: `ОсОО «${rPick(rng, ['Форт Групп', 'Артель Инвест', 'Стройсервис', 'Бизнес Альянс'])}»`,
-      phone: phone(rng), origin: 'own', createdAt: addDays(TODAY, -rInt(rng, 20, 200)),
+      phone: phoneNumber, whatsapp: phoneNumber, origin: 'own', createdAt: addDays(TODAY, -rInt(rng, 20, 200)),
+      inn: `2${rInt(rng, 100000, 999999)}${rInt(rng, 10000, 99999)}`,
+      address: `г. Бишкек, ${rPick(rng, STREETS)}, ${rInt(rng, 1, 120)}`,
+      source: 'Прямое обращение',
     })
   }
 
@@ -512,6 +530,10 @@ function build() {
       projectId: u.projectId, clientId: client.id, unitIds: [u.id], dealType,
       status: isFull ? 'paid' : 'active', currency: 'USD', price, discount, signedAt, createdAt: signedAt,
       route: rPick(rng, ['company', 'notary', 'state_registry']), agentId: rBool(rng, 0.2) ? 'agent-1' : undefined,
+      managerId: rPick(rng, managers),
+      // способ оплаты и банк нужны и в досье клиента, и в фильтрах реестра
+      paymentMethodId: isFull ? 'pm-1' : rWeighted(rng, [['pm-2', 70], ['pm-3', 30]] as [string, number][]),
+      bank: isFull ? undefined : rBool(rng, 0.35) ? rPick(rng, ['Доскредобанк', 'РСК Банк', 'Оптима Банк']) : undefined,
     })
     u.contractId = contractId
 
@@ -631,6 +653,98 @@ function build() {
     }
   }
 
+  // --- документы покупателей ---
+  // У клиента с договором Data Room не должен быть пустым: паспорт, договор,
+  // квитанции по подтверждённым платежам и ипотечные бумаги там, где банк.
+  for (const contract of contracts) {
+    const client = clients.find((c) => c.id === contract.clientId)
+    if (!client) continue
+    const ownerName = managerNames[leads.find((l) => l.id === contract.leadId)?.assignedTo ?? ''] ?? 'Отдел продаж'
+
+    if (!documents.some((d) => d.clientId === client.id && d.kind === 'passport')) {
+      docSeq += 1
+      documents.push({
+        id: `cdoc-${docSeq}`, clientId: client.id, kind: client.kind === 'company' ? 'other' : 'passport',
+        name: client.kind === 'company' ? 'Свидетельство о регистрации' : 'Паспорт (разворот)',
+        url: documentImage(client.kind === 'company' ? 'Свидетельство о регистрации' : 'Паспорт гражданина КР', [
+          `${client.kind === 'company' ? 'Организация' : 'ФИО'}: ${client.name}`,
+          `ИНН: ${client.inn ?? '—'}`,
+          client.address ? `Адрес: ${client.address}` : 'Адрес: —',
+        ], '#34495A'),
+        mime: 'image/svg+xml', sizeBytes: rInt(rng, 180000, 620000),
+        uploadedBy: ownerName, uploadedAt: addDays(contract.createdAt, -2),
+        signed: true, signedAt: addDays(contract.createdAt, -2),
+      })
+    }
+
+    if (!documents.some((d) => d.contractId === contract.id && d.kind === 'contract')) {
+      docSeq += 1
+      const unit = units.find((u) => u.id === contract.unitIds[0])
+      documents.push({
+        id: `cdoc-${docSeq}`, clientId: client.id, contractId: contract.id, kind: 'contract',
+        name: `Договор ${contract.number}`,
+        url: documentImage(`Договор ${contract.number}`, [
+          `Покупатель: ${client.name}`,
+          `Объект: № ${unit?.number ?? '—'}`,
+          `Сумма: ${contract.price.toLocaleString('ru-RU')} USD`,
+        ]),
+        mime: 'image/svg+xml', sizeBytes: rInt(rng, 240000, 900000),
+        uploadedBy: ownerName, uploadedAt: contract.createdAt, signed: rBool(rng, 0.8),
+      })
+    }
+
+    // квитанции по первым подтверждённым платежам
+    const confirmed = payments.filter((p) => p.contractId === contract.id && p.status === 'confirmed').slice(0, 2)
+    for (const pay of confirmed) {
+      docSeq += 1
+      documents.push({
+        id: `cdoc-${docSeq}`, clientId: client.id, contractId: contract.id, kind: 'receipt',
+        name: `Квитанция ${pay.receiptNumber ?? pay.id}`,
+        url: documentImage('Приходный кассовый ордер', [
+          `Плательщик: ${client.name}`,
+          `Договор: ${contract.number}`,
+          `Сумма: ${pay.amount.toLocaleString('ru-RU')} USD`,
+        ], '#2F7D5C'),
+        mime: 'image/svg+xml', sizeBytes: rInt(rng, 90000, 240000),
+        uploadedBy: 'Елена Волкова', uploadedAt: pay.date, signed: true, signedAt: pay.date,
+      })
+    }
+
+    if (contract.bank) {
+      docSeq += 1
+      documents.push({
+        id: `cdoc-${docSeq}`, clientId: client.id, contractId: contract.id, kind: 'mortgage',
+        name: `Одобрение ипотеки · ${contract.bank}`,
+        url: documentImage('Решение банка по ипотеке', [
+          `Банк: ${contract.bank}`,
+          `Заёмщик: ${client.name}`,
+          `Одобрено: ${Math.round(contract.price * 0.8).toLocaleString('ru-RU')} USD`,
+        ], '#3A6EA5'),
+        mime: 'image/svg+xml', sizeBytes: rInt(rng, 120000, 380000),
+        uploadedBy: ownerName, uploadedAt: addDays(contract.createdAt, -5), signed: true,
+      })
+    }
+  }
+
+  // --- VIP ---
+  // Особое внимание заслуживают те, кто покупает не первый раз или на крупную
+  // сумму: ставить галочку руками по 50 клиентам никто не будет.
+  const spentByClient = new Map<string, { sum: number; count: number }>()
+  for (const c of contracts) {
+    const cur = spentByClient.get(c.clientId) ?? { sum: 0, count: 0 }
+    cur.sum += c.price
+    cur.count++
+    spentByClient.set(c.clientId, cur)
+  }
+  for (const client of clients) {
+    const stat = spentByClient.get(client.id)
+    if (!stat) continue
+    // VIP — это повторная покупка или действительно крупная сумма; если
+    // пометить половину базы, метка перестаёт что-либо значить
+    if (stat.count > 1 || stat.sum >= 150000) client.vip = true
+    if (stat.count > 1) client.source = 'Повторная покупка'
+  }
+
   // --- история помещений ---
   // Цена квартиры меняется не раз в жизни: индексация по готовности, акции,
   // корректировки под спрос. Без этой ленты менеджер не может ответить на
@@ -726,6 +840,7 @@ function build() {
     freeContracts.splice(idx, 1)
     contract.leadId = lead.id
     contract.clientId = lead.clientId
+    contract.managerId = lead.assignedTo
 
     const signed = contract.signedAt ?? contract.createdAt
     lead.createdAt = addDays(signed, -rInt(rng, 12, 75))

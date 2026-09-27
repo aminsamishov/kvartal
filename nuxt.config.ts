@@ -24,6 +24,7 @@ export default defineNuxtConfig({
     { path: '~/components/dashboard', pathPrefix: false },
     { path: '~/components/charts', pathPrefix: false },
     { path: '~/components/leads', pathPrefix: false },
+    { path: '~/components/clients', pathPrefix: false },
     { path: '~/components/settings', pathPrefix: false },
   ],
 

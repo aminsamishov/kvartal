@@ -1,4 +1,4 @@
-import type { CommKind, CommOutcome, ContractStatus, DealType, DocKind, FacadeTag, LeadPriority, LeadStage, LeadTaskKind, PaymentKind, PaymentPlanKind, PaymentStatus, ReservationKind, UnitKind, UnitStatus } from '~/types/models'
+import type { ClientOrigin, CommKind, CommOutcome, ContractStatus, DealType, DocKind, FacadeTag, LeadPriority, LeadStage, LeadTaskKind, MaritalStatus, PaymentKind, PaymentPlanKind, PaymentStatus, ReservationKind, UnitKind, UnitStatus } from '~/types/models'
 
 export const UNIT_STATUS_META: Record<UnitStatus, { label: string; tone: 'ok' | 'warn' | 'bad' | 'info' | 'neutral' | 'plum'; boardBg: string; boardBorder: string }> = {
   free: { label: 'Свободно', tone: 'neutral', boardBg: 'bg-panel', boardBorder: 'border-line' },
@@ -132,10 +132,26 @@ export const COMM_OUTCOME_META: Record<CommOutcome, { label: string; tone: 'ok' 
 
 export const DOC_KIND_META: Record<DocKind, { label: string; icon: string }> = {
   passport: { label: 'Паспорт', icon: 'ph:identification-card' },
+  id_card: { label: 'ID-карта', icon: 'ph:user-rectangle' },
   contract: { label: 'Договор', icon: 'ph:file-text' },
   annex: { label: 'Доп. соглашение', icon: 'ph:file-plus' },
   receipt: { label: 'Квитанция', icon: 'ph:receipt' },
+  power_of_attorney: { label: 'Доверенность', icon: 'ph:scroll' },
+  mortgage: { label: 'Ипотека', icon: 'ph:bank' },
   other: { label: 'Прочее', icon: 'ph:paperclip' },
+}
+
+export const MARITAL_STATUS_META: Record<MaritalStatus, string> = {
+  single: 'Не женат / не замужем',
+  married: 'В браке',
+  divorced: 'В разводе',
+  widowed: 'Вдовец / вдова',
+}
+
+export const CLIENT_ORIGIN_META: Record<ClientOrigin, { label: string; tone: 'ok' | 'info' | 'warn' }> = {
+  own: { label: 'Свой', tone: 'ok' },
+  partner: { label: 'От партнёра', tone: 'info' },
+  reassignment: { label: 'Переоформление', tone: 'warn' },
 }
 
 export const DOC_KINDS = Object.keys(DOC_KIND_META) as DocKind[]

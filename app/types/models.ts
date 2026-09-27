@@ -199,6 +199,8 @@ export interface Unit {
   roomZones?: ImageZone[]
 }
 
+export type MaritalStatus = 'single' | 'married' | 'divorced' | 'widowed'
+
 export interface Client {
   id: string
   kind: ClientKind
@@ -209,6 +211,17 @@ export interface Client {
   passportMasked?: string
   createdAt: string
   note?: string
+  /** ИНН — без него не печатается договор и не выставляется счёт */
+  inn?: string
+  birthDate?: string
+  address?: string
+  maritalStatus?: MaritalStatus
+  /** откуда пришёл первый раз; у заявки свой источник, здесь — сводный */
+  source?: string
+  /** особое внимание: повторные покупки, крупные суммы, партнёры */
+  vip?: boolean
+  /** WhatsApp отличается от основного телефона нечасто, но отличается */
+  whatsapp?: string
 }
 
 export type LeadPriority = 'low' | 'normal' | 'high'
@@ -265,7 +278,7 @@ export interface LeadInterest {
   comment?: string
 }
 
-export type DocKind = 'passport' | 'contract' | 'annex' | 'receipt' | 'other'
+export type DocKind = 'passport' | 'id_card' | 'contract' | 'annex' | 'receipt' | 'power_of_attorney' | 'mortgage' | 'other'
 
 /** Файл клиента. В прототипе url — object URL, живёт в памяти вкладки. */
 export interface ClientDocument {
@@ -439,6 +452,12 @@ export interface Contract {
   agentId?: string
   /** заявка, из которой выросла сделка — без неё не посчитать источник продажи */
   leadId?: string
+  /** кто закрыл сделку; заявка может не сохраниться, а менеджер у договора есть всегда */
+  managerId?: string
+  /** способ оплаты из справочника настроек */
+  paymentMethodId?: string
+  /** банк-партнёр для ипотеки; у рассрочки застройщика его нет */
+  bank?: string
 }
 
 export interface PriceChangeItem {

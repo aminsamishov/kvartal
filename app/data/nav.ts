@@ -27,7 +27,7 @@ export const NAV: NavGroup[] = [
       { label: 'Заявки', to: '/leads', icon: 'ph:funnel' },
       { label: 'Мастер сделок', to: '/deals/new', icon: 'ph:magic-wand' },
       { label: 'Согласования', to: '/approvals', icon: 'ph:gavel' },
-      { label: 'Контакты', to: '/clients', icon: 'ph:address-book' },
+      { label: 'Клиенты', to: '/clients', icon: 'ph:address-book' },
     ],
   },
   {

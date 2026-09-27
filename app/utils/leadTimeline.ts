@@ -2,7 +2,7 @@ import type { Contract, Lead, Payment, Reservation, Unit } from '~/types/models'
 import { COMM_KIND_META, LEAD_TASK_KIND_META } from '~/utils/meta'
 import { money } from '~/utils/format'
 
-export type TimelineGroup = 'comm' | 'stage' | 'task' | 'note' | 'money' | 'object'
+export type TimelineGroup = 'comm' | 'stage' | 'task' | 'note' | 'money' | 'object' | 'doc'
 
 export interface TimelineItem {
   id: string
