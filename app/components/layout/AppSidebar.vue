@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { NAV } from '~/data/nav'
+import { NAV, type NavAccent } from '~/data/nav'
 
 const ui = useUiStore()
 const route = useRoute()
@@ -7,6 +7,23 @@ const route = useRoute()
 function isActive(to: string) {
   if (to === '/') return route.path === '/'
   return route.path === to || route.path.startsWith(`${to}/`)
+}
+
+/**
+ * Цвет модуля живёт на иконке, а не на подписи: цветной текст в меню читается
+ * хуже белого, а цветная иконка работает ориентиром — по ней раздел находят
+ * боковым зрением. У активного пункта тем же цветом светится метка слева.
+ */
+const ACCENT: Record<NavAccent, string> = {
+  objects: 'var(--mod-objects)',
+  price: 'var(--mod-price)',
+  sales: 'var(--mod-sales)',
+  reserve: 'var(--mod-reserve)',
+  finance: 'var(--mod-finance)',
+  docs: 'var(--mod-docs)',
+  analytics: 'var(--mod-analytics)',
+  users: 'var(--mod-users)',
+  system: 'var(--mod-system)',
 }
 </script>
 
@@ -32,8 +49,18 @@ function isActive(to: string) {
             :class="isActive(item.to) ? 'bg-side-panel text-white' : 'text-side-ink hover:bg-side-panel/60 hover:text-white'"
             :title="ui.sidebarCollapsed ? item.label : undefined"
           >
-            <span v-if="isActive(item.to)" class="absolute -left-2.5 top-1/2 h-4 w-[3px] -translate-y-1/2 rounded-full bg-plum" />
-            <Icon :name="item.icon" size="18" class="shrink-0" />
+            <span
+              v-if="isActive(item.to)" class="absolute -left-2.5 top-1/2 h-4 w-[3px] -translate-y-1/2 rounded-full"
+              :style="{ background: ACCENT[item.accent] }"
+            />
+            <span
+              class="grid h-[26px] w-[26px] shrink-0 place-items-center rounded-lg transition-colors"
+              :style="isActive(item.to)
+                ? { background: `color-mix(in srgb, ${ACCENT[item.accent]} 22%, transparent)`, color: ACCENT[item.accent] }
+                : { color: ACCENT[item.accent] }"
+            >
+              <Icon :name="item.icon" size="17" />
+            </span>
             <span v-if="!ui.sidebarCollapsed" class="truncate">{{ item.label }}</span>
           </NuxtLink>
         </div>

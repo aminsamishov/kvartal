@@ -54,6 +54,11 @@ export default <Partial<Config>>{
           warn: v('--board-warn'), 'warn-ink': v('--board-warn-ink'),
           bad: v('--board-bad'), 'bad-ink': v('--board-bad-ink'),
         },
+        mod: {
+          objects: v('--mod-objects'), price: v('--mod-price'), sales: v('--mod-sales'),
+          reserve: v('--mod-reserve'), finance: v('--mod-finance'), docs: v('--mod-docs'),
+          analytics: v('--mod-analytics'), users: v('--mod-users'), system: v('--mod-system'),
+        },
         chart: {
           sold: v('--c-sold'), inst: v('--c-inst'), reserve: v('--c-reserve'),
           free: v('--c-free'), closed: v('--c-closed'),

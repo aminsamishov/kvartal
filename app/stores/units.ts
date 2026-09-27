@@ -61,6 +61,34 @@ export const useUnitsStore = defineStore('units', {
 
       return { board, layouts, floorPlans, facades }
     },
+    /**
+     * Показатели дома: одна правда для карточки дома, генплана и всплывающей
+     * карточки на плане. Цена «от» считается по свободным квартирам — кладовая
+     * за 970 $ в этой строке только вводит в заблуждение.
+     */
+    buildingStats: (s) => (buildingId: string) => {
+      const units = s.units.filter((u) => u.buildingId === buildingId)
+      const total = units.length
+      const free = units.filter((u) => u.status === 'free').length
+      const reserved = units.filter((u) => u.status === 'reserved').length
+      const sold = units.filter((u) => u.status === 'sold' || u.status === 'installment').length
+      const apartments = units.filter((u) => u.kind === 'apartment')
+      const freePrices = units.filter((u) => u.status === 'free' && u.kind === 'apartment').map((u) => u.price)
+      const areaSum = apartments.reduce((sum, u) => sum + u.area, 0)
+      const priceSum = apartments.reduce((sum, u) => sum + u.price, 0)
+      return {
+        total,
+        free,
+        reserved,
+        sold,
+        apartments: apartments.length,
+        soldPct: total ? Math.round((sold / total) * 100) : 0,
+        freePct: total ? Math.round((free / total) * 100) : 0,
+        minPrice: freePrices.length ? Math.min(...freePrices) : 0,
+        avgPrice: apartments.length ? Math.round(priceSum / apartments.length) : 0,
+        avgPricePerM2: areaSum ? Math.round(priceSum / areaSum) : 0,
+      }
+    },
     projectStats: (s) => (projectId: string) => {
       const units = s.units.filter((u) => u.projectId === projectId)
       const total = units.length

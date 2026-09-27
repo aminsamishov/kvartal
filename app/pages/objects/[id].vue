@@ -1,9 +1,8 @@
 <script setup lang="ts">
 import { TODAY } from '~/data/seed'
 import { UNIT_STATUS_META } from '~/utils/meta'
-import { fmtDate, money, moneyCompact } from '~/utils/format'
-import { avgPricePerM2, lastMonths, seriesBy } from '~/utils/analytics'
-import type { MetricItem } from '~/components/dashboard/MetricStrip.vue'
+import { fmtDate } from '~/utils/format'
+import { lastMonths, seriesBy } from '~/utils/analytics'
 import type { UnitStatus } from '~/types/models'
 
 const route = useRoute()
@@ -40,36 +39,6 @@ const salesSeries = computed(() => seriesBy(
   (c) => c.signedAt, (c) => c.price,
 ))
 
-const metrics = computed<MetricItem[]>(() => {
-  const s = stats.value
-  const p = project.value
-  if (!s || !p) return []
-  return [
-    {
-      key: 'revenue', label: 'Выручка в работе', hero: true,
-      value: moneyCompact(s.revenue, p.currency), unit: p.currency,
-      hint: `${s.soldPct}% фонда реализовано · ${money(avgPricePerM2(projectUnits.value), p.currency)} за м²`,
-      spark: salesSeries.value,
-    },
-    {
-      key: 'total', label: 'Всего объектов', value: String(s.total),
-      meter: { pct: s.soldPct, caption: `${buildingsAll.value.length} домов · реализовано ${s.soldPct}%` },
-    },
-    {
-      key: 'free', label: 'Свободно', value: String(s.free), tone: 'ok',
-      meter: { pct: (s.free / (s.total || 1)) * 100, caption: `${Math.round((s.free / (s.total || 1)) * 100)}% фонда` },
-    },
-    {
-      key: 'reserved', label: 'В брони', value: String(s.reserved), tone: 'accent',
-      meter: { pct: (s.reserved / (s.total || 1)) * 100, caption: 'ждут решения клиента' },
-    },
-    {
-      key: 'deal', label: 'Продано и в рассрочке', value: String(s.sold + s.installment),
-      meter: { pct: ((s.sold + s.installment) / (s.total || 1)) * 100, caption: `${s.sold} продано · ${s.installment} в рассрочке` },
-    },
-  ]
-})
-
 /* ------------------------------ структура фонда ---------------------------- */
 
 const STATUS_ORDER: UnitStatus[] = ['sold', 'installment', 'reserved', 'free', 'closed']
@@ -104,23 +73,10 @@ const infoRows = computed(() => {
 
 <template>
   <div v-if="project" class="flex flex-col gap-5">
-    <PageHeader :title="project.name" :subtitle="`${project.address} · ${project.developer}`" eyebrow="Проект">
-      <template #meta>
-        <div class="mt-2.5 flex flex-wrap gap-1.5">
-          <StatusTag tone="info" size="sm">{{ propertyKindLabel[project.propertyKind] }}</StatusTag>
-          <StatusTag tone="neutral" size="sm">{{ project.stage }}</StatusTag>
-          <StatusTag tone="neutral" size="sm">{{ project.currency }}</StatusTag>
-          <StatusTag v-for="bank in project.banks" :key="bank" tone="neutral" size="sm" icon="ph:bank">{{ bank }}</StatusTag>
-        </div>
-      </template>
-      <template #actions>
-        <AppButton icon="ph:pencil-simple" @click="showEditProject = true">Редактировать</AppButton>
-        <AppButton icon="ph:tag" @click="navigateTo('/pricing')">Прайс-лист</AppButton>
-        <AppButton variant="primary" icon="ph:grid-nine" @click="navigateTo(`/board?project=${project.id}`)">Шахматка</AppButton>
-      </template>
-    </PageHeader>
-
-    <MetricStrip :items="metrics" />
+    <ProjectHeader
+      :project="project" :spark="salesSeries"
+      @edit="showEditProject = true" @add-building="showCreateBuilding = true"
+    />
 
     <div class="grid grid-cols-1 gap-4 xl:grid-cols-3">
       <AppCard title="Структура фонда" :subtitle="`${stats?.total ?? 0} помещений в проекте`">

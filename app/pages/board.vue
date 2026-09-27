@@ -1,4 +1,8 @@
 <script setup lang="ts">
+import type { PickerView } from '~/stores/board'
+
+const PICKER_VIEWS = ['master', 'board', 'facade', 'floor', 'list'] as const
+
 definePageMeta({ breadcrumb: [{ label: 'Мои объекты', to: '/objects' }, { label: 'Шахматка' }] })
 
 /**
@@ -16,10 +20,20 @@ const SCOPE = 'board'
 const scope = computed(() => board.scope(SCOPE))
 const activeUnitId = ref<string | null>((route.query.unit as string) || null)
 
-// ссылка вида /board?building=… приходит из карточки дома
+// ссылки в шахматку приходят из карточки проекта, карточки дома и генплана:
+// /board?project=…&view=master, /board?building=…&view=facade
 onMounted(() => {
-  const building = route.query.building as string | undefined
-  if (building) board.setBuilding(SCOPE, building)
+  const q = route.query as Record<string, string | undefined>
+  if (q.project && unitsStore.project(q.project)) ui.setProject(q.project)
+  if (q.building) {
+    board.setBuilding(SCOPE, q.building)
+    // дом задан ссылкой — проект в шапке подтягиваем за ним, иначе подбор
+    // покажет дома другого ЖК
+    const projectOfBuilding = unitsStore.building(q.building)?.projectId
+    if (projectOfBuilding) ui.setProject(projectOfBuilding)
+  }
+  if (q.view && (PICKER_VIEWS as readonly string[]).includes(q.view)) board.setView(SCOPE, q.view as PickerView)
+  if (q.floor) board.setFloor(SCOPE, Number(q.floor))
 })
 
 const projectId = computed(() => ui.currentProjectId)

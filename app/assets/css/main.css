@@ -71,6 +71,20 @@
   --c-grid: var(--line);
   --c-accent: #6E4453;
 
+  /* Цвета модулей. Иконка в меню — не украшение, а ориентир: раздел
+     опознаётся боковым зрением по цвету раньше, чем прочитано название.
+     Подобраны из той же тёплой палитры, различимы между собой и не спорят
+     с акцентом бренда. */
+  --mod-objects: #6E7A8A;
+  --mod-price: #B8780E;
+  --mod-sales: #3A6EA5;
+  --mod-reserve: #C9821A;
+  --mod-finance: #2F7D5C;
+  --mod-docs: #7B5EA7;
+  --mod-analytics: #3E8FA8;
+  --mod-users: #8C5566;
+  --mod-system: #6D6772;
+
   /* боковая панель */
   --side: #18161B;
   --side-panel: #201D23;
@@ -97,6 +111,8 @@
   --info: #7FA8D6; --info-bg: #1C2A38;
   --free: #1B191E; --reserve: #E3A84C; --reserve-bg: #382D1A; --inst: #C48CA0; --inst-bg: #2F2229; --sold: #7C93A3; --sold-bg: #222831;
   --side: #0E0D10; --side-panel: #17151A; --side-ink: #8B8390; --side-line: #262229;
+  --mod-objects: #9AA7B8; --mod-price: #E3A84C; --mod-sales: #7FA8D6; --mod-reserve: #E3A84C;
+  --mod-finance: #5DBB8E; --mod-docs: #A98FD0; --mod-analytics: #6FB6CE; --mod-users: #C48CA0; --mod-system: #9D95A2;
   --c-sold: #567085; --c-inst: #C48CA0; --c-reserve: #E3A84C; --c-free: #9A92A5; --c-closed: #6B6476;
   --c-step-1: #754655; --c-step-2: #8E5D6D; --c-step-3: #A87786; --c-step-4: #C2929F; --c-step-5: #D8AEBE;
   --c-accent: #C48CA0;
@@ -114,6 +130,8 @@
     --info: #7FA8D6; --info-bg: #1C2A38;
     --free: #1B191E; --reserve: #E3A84C; --reserve-bg: #382D1A; --inst: #C48CA0; --inst-bg: #2F2229; --sold: #7C93A3; --sold-bg: #222831;
     --side: #0E0D10; --side-panel: #17151A; --side-ink: #8B8390; --side-line: #262229;
+  --mod-objects: #9AA7B8; --mod-price: #E3A84C; --mod-sales: #7FA8D6; --mod-reserve: #E3A84C;
+  --mod-finance: #5DBB8E; --mod-docs: #A98FD0; --mod-analytics: #6FB6CE; --mod-users: #C48CA0; --mod-system: #9D95A2;
   --c-sold: #567085; --c-inst: #C48CA0; --c-reserve: #E3A84C; --c-free: #9A92A5; --c-closed: #6B6476;
   --c-step-1: #754655; --c-step-2: #8E5D6D; --c-step-3: #A87786; --c-step-4: #C2929F; --c-step-5: #D8AEBE;
   --c-accent: #C48CA0;
