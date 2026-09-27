@@ -182,7 +182,10 @@ function generateDoc(name: string, process: string) {
       <p class="mb-3 text-[12.5px] text-muted">
         Выберите объект — откроется мастер сделок с этим клиентом. Действующий договор и его график не меняются.
       </p>
-      <UnitPicker :scope-key="`contract:${contract.id}`" :project-id="contract.projectId" @open="startUpsell" />
+      <UnitPicker
+        :scope-key="`contract:${contract.id}`" :project-id="contract.projectId"
+        @open="startUpsell" @contract="startUpsell" @reserve="startUpsell"
+      />
     </AppModal>
 
     <AppModal v-model="showPayForm" title="Новый платёж" width="sm">

@@ -2,6 +2,7 @@
 import type { CommKind, CommOutcome, LeadStage } from '~/types/models'
 import { COMM_OUTCOME_META } from '~/utils/meta'
 import { interestFromLead } from '~/composables/useLeadMatching'
+import type { LeadAction } from '~/utils/leadActions'
 
 /**
  * Карточка заявки — рабочее место менеджера. Весь цикл продажи живёт здесь:
@@ -113,6 +114,63 @@ function pickUnit(unitId: string) {
   ui.toast(linked ? 'Убрали из подборки клиента' : 'Добавили в подборку клиента', linked ? 'info' : 'ok')
 }
 
+/* ----------------------------- рекомендации ------------------------------ */
+
+const showTaskForm = ref(false)
+const taskKind = ref<'call' | 'visit'>('call')
+const completeSignal = ref(0)
+
+/**
+ * Рекомендация должна выполняться одним нажатием — иначе она остаётся
+ * советом, который никто не выполняет.
+ */
+function runAction(a: LeadAction) {
+  if (!lead.value) return
+  switch (a.kind) {
+    case 'call': startComm('call_out'); break
+    case 'whatsapp': startComm('whatsapp'); break
+    case 'complete_task': tab.value = 'overview'; completeSignal.value++; break
+    case 'task':
+      tab.value = 'overview'
+      taskKind.value = a.key === 'visit' ? 'visit' : 'call'
+      showTaskForm.value = true
+      break
+    case 'picker':
+      goPicker()
+      if (a.unitId) board.select(scopeKey.value, a.unitId)
+      break
+    case 'reserve': reserveUnitId.value = a.unitId ?? null; break
+    case 'extend':
+      if (reservation.value) {
+        salesStore.extendReservation(reservation.value.id, 3, author.value)
+        ui.toast('Бронь продлена на 3 дня', 'ok')
+      }
+      break
+    case 'contract': goContract(a.unitId); break
+    case 'docs': tab.value = 'docs'; break
+    case 'approvals': tab.value = 'finance'; break
+    case 'payment':
+      if (contract.value) navigateTo(`/contracts/${contract.value.id}`)
+      else tab.value = 'finance'
+      break
+    case 'lost': emit('request-lost', lead.value.id); break
+  }
+}
+
+/** Полная карточка помещения поверх карточки заявки — из мини-карточки подбора. */
+const unitCardId = ref<string | null>(null)
+watch(() => props.leadId, () => { unitCardId.value = null })
+
+// Горячие клавиши карточки. На вкладке «Подбор» их перехватывает сам подбор —
+// там у B и D есть конкретная выделенная квартира, а здесь действие идёт
+// по активной брони заявки.
+useHotkeys({
+  enabled: () => Boolean(props.leadId) && tab.value !== 'match',
+  reserve: startReserve,
+  contract: () => goContract(),
+  compare: goPicker,
+})
+
 const linkedUnits = computed(() => (lead.value?.interestedUnitIds ?? [])
   .map((id) => unitsStore.unit(id))
   .filter((u): u is NonNullable<typeof u> => !!u))
@@ -151,6 +209,11 @@ const linkedUnits = computed(() => (lead.value?.interestedUnitIds ?? [])
         <TaskComposer :lead-id="lead.id" default-kind="visit" @done="showVisitForm = false" @cancel="showVisitForm = false" />
       </div>
 
+      <!-- задача из рекомендации -->
+      <div v-if="showTaskForm" class="mb-4">
+        <TaskComposer :lead-id="lead.id" :default-kind="taskKind" @done="showTaskForm = false" @cancel="showTaskForm = false" />
+      </div>
+
       <!-- бронь из шапки и из подбора -->
       <div v-if="reserveUnitId" class="mb-4">
         <ReserveComposer :lead-id="lead.id" :unit-id="reserveUnitId" @done="reserveUnitId = null" @cancel="reserveUnitId = null" />
@@ -159,7 +222,8 @@ const linkedUnits = computed(() => (lead.value?.interestedUnitIds ?? [])
       <!-- ОБЗОР -->
       <div v-if="tab === 'overview'" class="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
         <div class="flex min-w-0 flex-col gap-4">
-          <LeadNextAction :lead="lead" />
+          <LeadNextAction :lead="lead" :complete-signal="completeSignal" />
+          <LeadAiActions :lead="lead" @act="runAction" />
           <LeadInterestBlock :lead="lead" @match="goPicker" />
           <LeadMatchingUnits :lead="lead" @picker="goPicker" @open="pickUnit" />
         </div>
@@ -190,8 +254,8 @@ const linkedUnits = computed(() => (lead.value?.interestedUnitIds ?? [])
         </div>
 
         <UnitPicker
-          :scope-key="scopeKey" :lead-id="lead.id"
-          @open="pickUnit" @reserve="reserveUnitId = $event"
+          :scope-key="scopeKey" :lead-id="lead.id" :linked-ids="lead.interestedUnitIds"
+          @link="pickUnit" @open="unitCardId = $event" @reserve="reserveUnitId = $event" @contract="goContract"
         />
 
         <p class="flex items-start gap-1.5 text-[11.5px] text-muted">
@@ -227,6 +291,9 @@ const linkedUnits = computed(() => (lead.value?.interestedUnitIds ?? [])
           <LeadRelations :lead="lead" @open-lead="emit('navigate', $event)" />
         </div>
       </div>
+
+      <!-- карточка помещения поверх карточки заявки: открывается из подбора -->
+      <UnitDrawer :unit-id="unitCardId" @close="unitCardId = null" @navigate="unitCardId = $event" />
     </template>
   </AppDrawer>
 </template>

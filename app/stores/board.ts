@@ -1,7 +1,7 @@
 import { emptyUnitFilters, filtersFromInterest, type UnitFilterState } from '~/utils/unitFilters'
 import type { LeadInterest } from '~/types/models'
 
-export type PickerView = 'board' | 'facade' | 'floor' | 'list'
+export type PickerView = 'master' | 'board' | 'facade' | 'floor' | 'list'
 
 /**
  * Состояние одного рабочего места подбора. Фильтр, выделение и сравнение живут

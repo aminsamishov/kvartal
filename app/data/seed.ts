@@ -1,5 +1,5 @@
 import type {
-  AuditEntry, Building, Client, Contract, DealType, DiscountRequest, ExplicationRoom, ImageZone, Lead, LeadEvent, LeadStage,
+  AuditEntry, Building, Client, Contract, DealType, DiscountRequest, ExplicationRoom, ImageZone, Lead, LeadEvent, LeadStage, UnitHistoryEntry,
   ClientDocument, LeadComm, LeadTask, LeadTaskKind, NotificationItem,
   Payment, PriceDraft, Project, QueueEntry, Reservation, ScheduleItem, Unit, UnitKind, UnitStatus,
 } from '~/types/models'
@@ -7,7 +7,7 @@ import { makeRng, rBool, rInt, rPick, rWeighted, type Rng } from '~/utils/rng'
 import { defaultExplication, roomColor } from '~/utils/explication'
 import { UNIT_BOARD_COLOR } from '~/utils/meta'
 import { AGENT_NAMES, FIRST_NAMES_F, FIRST_NAMES_M, LAST_NAMES_F, LAST_NAMES_M, LEAD_SOURCES } from './names'
-import { documentImage, facadeFloorBand, facadeImage, floorPlanImage, floorPlateApartments, unitLayoutImage, unitLayoutRects } from './placeholders'
+import { documentImage, facadeFloorBand, facadeImage, floorPlanImage, floorPlateApartments, masterPlanFootprint, masterPlanImage, unitLayoutImage, unitLayoutRects } from './placeholders'
 
 // "Сегодня" зафиксировано, чтобы график/просрочки были стабильны между рендерами.
 export const TODAY = new Date('2026-09-23T09:00:00+06:00')
@@ -34,14 +34,14 @@ export const PROJECTS: Project[] = [
     banks: ['Доскредобанк', 'РСК Банк'], currency: 'USD', country: 'Кыргызстан', stage: 'Строительство', salesStart: '2025-11-01',
     infrastructure: 'Детский сад, паркинг, двор без машин, коммерция на 1 этаже',
     website: 'https://aurora.kvartal.kg', salesOfficeId: 'office-2',
-    buildingIds: ['aurora-1', 'aurora-2'], accent: '#6E4453', archived: false, media: [], masterPlans: [],
+    buildingIds: ['aurora-1', 'aurora-2'], accent: '#6E4453', archived: false, media: [], masterPlans: [], masterPlanZones: [],
   },
   {
     id: 'panorama', name: 'ЖК «Панорама»', propertyKind: 'residential', address: 'ул. Байтик Баатыра, 88', developer: 'ОсОО «Кварталстрой»',
     banks: ['Доскредобанк'], currency: 'USD', country: 'Кыргызстан', stage: 'Котлован', salesStart: '2026-04-15',
     infrastructure: 'Подземный паркинг, коммерция на 1 этаже',
     website: '', salesOfficeId: 'office-1',
-    buildingIds: ['panorama-1'], accent: '#3A6EA5', archived: false, media: [], masterPlans: [],
+    buildingIds: ['panorama-1'], accent: '#3A6EA5', archived: false, media: [], masterPlans: [], masterPlanZones: [],
   },
 ]
 
@@ -625,6 +625,71 @@ function build() {
     }
   }
 
+  // --- история помещений ---
+  // Цена квартиры меняется не раз в жизни: индексация по готовности, акции,
+  // корректировки под спрос. Без этой ленты менеджер не может ответить на
+  // «а почему в марте было дешевле», а руководитель — увидеть, что рост
+  // остановился. Собираем правдоподобную историю: шаги вверх к текущей цене.
+  const unitHistory: UnitHistoryEntry[] = []
+  const priceAuthors = ['Гульнара Молдалиева', 'Тимур Асанов', 'Система']
+  for (const u of units) {
+    if (u.kind === 'parking' || u.kind === 'storage') continue
+    const steps = rInt(rng, 2, 4)
+    // от стартовой цены (на 8–16% ниже) поднимаемся к текущей
+    const startPrice = Math.round(u.price / (1 + (0.08 + rng() * 0.08)) / 10) * 10
+    let prev = startPrice
+    const firstDaysAgo = rInt(rng, 240, 400)
+    for (let i = 1; i <= steps; i++) {
+      const at = addDays(TODAY, -Math.round(firstDaysAgo * (1 - i / (steps + 1))))
+      const next = i === steps ? u.price : Math.round((prev + (u.price - prev) * (0.35 + rng() * 0.3)) / 10) * 10
+      if (next === prev) continue
+      unitHistory.push({
+        id: `uh-${u.id}-${i}`, unitId: u.id, at, author: rPick(rng, priceAuthors),
+        kind: 'price', from: String(prev), to: String(next),
+        note: i === steps ? 'Индексация по стадии строительства' : undefined,
+      })
+      prev = next
+    }
+    if (u.status === 'sold' || u.status === 'installment') {
+      unitHistory.push({
+        id: `uh-${u.id}-st`, unitId: u.id, at: addDays(TODAY, -rInt(rng, 5, 200)),
+        author: rPick(rng, priceAuthors), kind: 'status', from: 'free', to: u.status,
+      })
+    } else if (u.status === 'reserved') {
+      unitHistory.push({
+        id: `uh-${u.id}-st`, unitId: u.id, at: addDays(TODAY, -rInt(rng, 0, 3)),
+        author: rPick(rng, priceAuthors), kind: 'status', from: 'free', to: 'reserved',
+      })
+    }
+  }
+  unitHistory.sort((a, b) => b.at.localeCompare(a.at))
+
+  // --- генплан ---
+  // Верхний уровень навигации: ЖК → дом → фасад → этаж. Картинку и контуры
+  // рисует одна функция, поэтому области ложатся ровно по корпусам.
+  for (const project of PROJECTS) {
+    const projectBuildings = BUILDINGS.filter((b) => b.projectId === project.id && !b.archived)
+    if (!projectBuildings.length) continue
+    project.masterPlans = [{
+      id: `genplan-${project.id}`,
+      url: masterPlanImage(projectBuildings.map((b) => ({ name: b.name, floors: b.floors }))),
+      name: `Генплан ${project.name}`,
+      kind: 'photo',
+      addedAt: addDays(TODAY, -120),
+    }]
+    project.masterPlanZones = projectBuildings.map((b, i) => {
+      const f = masterPlanFootprint(i, projectBuildings.length)
+      return {
+        id: `${project.id}-mp-${b.id}`,
+        shape: 'rect' as const,
+        points: [{ x: f.x, y: f.y }, { x: f.x + f.w, y: f.y + f.h }],
+        refId: `building:${b.id}`,
+        label: b.name,
+        color: project.accent,
+      }
+    })
+  }
+
   // --- связь договоров с заявками ---
   // Без leadId договор не знает, из какой заявки он вырос: не посчитать ни
   // средний цикл сделки, ни продажи по менеджерам, ни источник продажи.
@@ -752,7 +817,7 @@ function build() {
   })
 
   void AGENT_NAMES
-  return { units, clients, leads, reservations, queue, contracts, scheduleItems, payments, priceDrafts, audit, notifications, documents, discountRequests }
+  return { units, clients, leads, reservations, queue, contracts, scheduleItems, payments, priceDrafts, audit, notifications, documents, discountRequests, unitHistory }
 }
 
 const seed = build()
@@ -770,3 +835,4 @@ export const PRICE_DRAFTS = seed.priceDrafts
 export const AUDIT = seed.audit
 export const NOTIFICATIONS = seed.notifications
 export const DISCOUNT_REQUESTS = seed.discountRequests
+export const UNIT_HISTORY = seed.unitHistory

@@ -173,33 +173,51 @@ export const useSalesStore = defineStore('sales', {
      * висела вечно и очередь не двигалась — фонд блокировался молча.
      * Вызывается при загрузке приложения и после действий с бронями.
      */
+    /**
+     * Передать объект первому в очереди. Очередь имеет смысл только если она
+     * двигается: следующему интересанту сразу оформляется короткая бронь без
+     * задатка — иначе объект «висит забронированным» на неизвестного человека,
+     * и менеджер об этом узнаёт последним.
+     *
+     * Возвращает запись очереди, если передача состоялась.
+     */
+    offerUnitToQueue(unitId: string, author: string, now = new Date()) {
+      const unitsStore = useUnitsStore()
+      const next = unitsStore.offerToNextInQueue(unitId)
+      if (!next) return null
+
+      const unit = unitsStore.unit(unitId)
+      if (!next.clientId) {
+        // контакт без карточки клиента: объект держим за ним, звонит менеджер
+        return next
+      }
+
+      const lead = this.leads.find((l) => l.clientId === next.clientId && l.stage !== 'lost' && l.stage !== 'deal')
+      const nowIso = now.toISOString()
+      const handoff: Reservation = {
+        id: uid('res'), unitId, clientId: next.clientId, leadId: lead?.id,
+        kind: 'no_deposit', deposit: 0, createdAt: nowIso,
+        expiresAt: new Date(now.getTime() + 86400000).toISOString(),
+        status: 'active', createdBy: author,
+      }
+      this.reservations.push(handoff)
+      void repo.createReservation(handoff)
+      if (unit) unit.reservationId = handoff.id
+      if (lead) {
+        this.logLead(lead.id, 'field', `Освободившаяся квартира предложена из очереди${unit ? `: № ${unit.number}` : ''}`, author)
+        if (lead.stage !== 'reserved') this.moveLead(lead.id, 'reserved', author)
+      }
+      return next
+    },
+
     expireReservations(now = new Date()) {
       const expired = this.reservations.filter((r) => r.status === 'active' && new Date(r.expiresAt) < now)
       const unitsStore = useUnitsStore()
+      const autoTransfer = useSettingsStore().reservationSettings.autoQueueTransfer
       for (const r of expired) {
         r.status = 'expired'
-        const offered = unitsStore.offerToNextInQueue(r.unitId)
-        if (!offered) {
-          unitsStore.setStatus(r.unitId, 'free')
-        } else if (useSettingsStore().reservationSettings.autoQueueTransfer && offered.clientId) {
-          // Очередь имеет смысл только если она двигается сама: следующему
-          // интересанту сразу оформляется короткая бронь без задатка, иначе
-          // объект просто «висит забронированным» на неизвестного человека.
-          const lead = this.leads.find((l) => l.clientId === offered.clientId
-            && l.stage !== 'lost' && l.stage !== 'deal')
-          const nowIso = now.toISOString()
-          const handoff: Reservation = {
-            id: uid('res'), unitId: r.unitId, clientId: offered.clientId, leadId: lead?.id,
-            kind: 'no_deposit', deposit: 0, createdAt: nowIso,
-            expiresAt: new Date(now.getTime() + 86400000).toISOString(),
-            status: 'active', createdBy: 'Автоматизация',
-          }
-          this.reservations.push(handoff)
-          void repo.createReservation(handoff)
-          const unit = unitsStore.unit(r.unitId)
-          if (unit) unit.reservationId = handoff.id
-          if (lead) this.logLead(lead.id, 'field', `Освободившаяся квартира предложена из очереди${unit ? `: № ${unit.number}` : ''}`, 'Автоматизация')
-        }
+        const offered = autoTransfer ? this.offerUnitToQueue(r.unitId, 'Автоматизация', now) : null
+        if (!offered) unitsStore.setStatus(r.unitId, 'free')
         if (r.leadId) {
           this.logLead(r.leadId, 'field', offered
             ? 'Бронь истекла — объект ушёл следующему в очереди'

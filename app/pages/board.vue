@@ -24,6 +24,11 @@ onMounted(() => {
 
 const projectId = computed(() => ui.currentProjectId)
 
+/** Договор из подбора: мастер сделок знает, с какой квартиры начать. */
+function goContract(unitId: string) {
+  navigateTo(`/deals/new?unit=${unitId}`)
+}
+
 const stats = computed(() => {
   const units = unitsStore.unitsByBuilding(scope.value.buildingId)
   const free = units.filter((u) => u.status === 'free').length
@@ -58,6 +63,8 @@ const expiring = computed(() => salesStore.activeReservations
     <UnitPicker
       :scope-key="SCOPE" :project-id="projectId" can-edit
       @open="activeUnitId = $event"
+      @reserve="activeUnitId = $event"
+      @contract="goContract"
     />
 
     <UnitDrawer :unit-id="activeUnitId" @close="activeUnitId = null" @navigate="activeUnitId = $event" />

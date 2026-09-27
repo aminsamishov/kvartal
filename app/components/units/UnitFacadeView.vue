@@ -11,14 +11,16 @@ import { area as fmtArea, money, moneyCompact } from '~/utils/format'
  * цвет по статусу, клик открывает карточку, Ctrl+клик выделяет, выделение
  * общее со всеми остальными представлениями подбора.
  */
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   scopeKey: string
   building: Building
   units: Unit[]
   /** прошедшие фильтр — остальные гасим, но не убираем: фасад должен читаться целиком */
   matchIds: Set<string>
   scores?: Map<string, MatchedUnit>
-}>()
+  /** подсказка при наведении; гасим, пока открыта мини-карточка */
+  tooltip?: boolean
+}>(), { tooltip: true })
 const emit = defineEmits<{ open: [string] }>()
 
 const board = useBoardStore()
@@ -94,7 +96,7 @@ function queueOf(id: string) {
 
     <template v-if="facade?.imageUrl">
       <UnitZoneCanvas
-        :image-url="facade.imageUrl" :marks="marks"
+        :image-url="facade.imageUrl" :marks="marks" :tooltip="tooltip"
         @pick="emit('open', $event)" @toggle="board.toggleSelect(scopeKey, $event)"
       >
         <template #tip="{ mark }">

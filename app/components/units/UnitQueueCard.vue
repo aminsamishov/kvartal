@@ -44,14 +44,25 @@ async function addFromLead(clientId: string, name: string, phone: string) {
   ui.toast(`${name} в очереди`, 'ok')
 }
 
+const author = computed(() => auth.user?.name ?? 'Система')
+
+/**
+ * Передать объект следующему вручную. Делает ровно то же, что автоматика при
+ * истечении брони: оформляет короткую бронь без задатка, чтобы объект не
+ * «повис» ни на ком.
+ */
 function offerNext() {
-  const next = unitsStore.offerToNextInQueue(props.unit.id)
+  const next = salesStore.offerUnitToQueue(props.unit.id, author.value)
   if (!next) { ui.toast('Очередь пуста', 'info'); return }
-  ui.toast(`Предложено: ${next.name} — позвоните и подтвердите бронь`, 'ok')
+  ui.toast(next.clientId
+    ? `№ ${props.unit.number} передана: ${next.name}, бронь на сутки`
+    : `Предложено: ${next.name} — позвоните и оформите бронь`, 'ok')
 }
 
-const author = computed(() => auth.user?.name ?? 'Система')
-void author
+/** Сколько человек ждёт и сколько дней ждёт первый — это и есть давление спроса. */
+function waitingDays(iso: string) {
+  return Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 86400000))
+}
 </script>
 
 <template>
@@ -107,7 +118,13 @@ void author
           {{ q.name }}
           <span class="text-muted">{{ q.phone ? fmtPhone(q.phone) : '' }}</span>
         </span>
-        <span class="shrink-0 text-[11px] text-muted">{{ fmtDate(q.addedAt) }}</span>
+        <span class="shrink-0 text-[11px] text-muted" :title="`В очереди с ${fmtDate(q.addedAt)}`">
+          {{ waitingDays(q.addedAt) ? `ждёт ${waitingDays(q.addedAt)} дн.` : 'сегодня' }}
+        </span>
+        <a
+          v-if="q.phone" :href="`tel:+${q.phone}`" class="shrink-0 text-muted hover:text-plum" title="Позвонить"
+          @click.stop
+        ><Icon name="ph:phone" size="13" /></a>
         <button class="shrink-0 text-muted hover:text-bad" title="Убрать из очереди" @click="unitsStore.removeFromQueue(unit.id, i)">
           <Icon name="ph:x" size="13" />
         </button>

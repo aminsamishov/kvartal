@@ -1,5 +1,5 @@
-import { BUILDINGS, PROJECTS, QUEUE, UNITS } from '~/data/seed'
-import type { Building, Project, QueueEntry, Unit, UnitStatus } from '~/types/models'
+import { BUILDINGS, PROJECTS, QUEUE, UNIT_HISTORY, UNITS } from '~/data/seed'
+import type { Building, Project, QueueEntry, Unit, UnitHistoryEntry, UnitStatus } from '~/types/models'
 import { clone, delay, uid } from './api'
 
 export function fetchProjects(): Promise<Project[]> {
@@ -16,6 +16,10 @@ export function fetchUnits(): Promise<Unit[]> {
 
 export function fetchQueue(): Promise<QueueEntry[]> {
   return delay(clone(QUEUE), 150)
+}
+
+export function fetchUnitHistory(): Promise<UnitHistoryEntry[]> {
+  return delay(clone(UNIT_HISTORY), 200)
 }
 
 export function updateUnitStatus(unitId: string, status: UnitStatus): Promise<void> {

@@ -54,6 +54,8 @@ export interface Project {
   archived: boolean
   media: MediaAsset[]
   masterPlans: MediaAsset[]
+  /** контуры домов на генплане; refId — `building:<id>` */
+  masterPlanZones: ImageZone[]
 }
 
 export const COMPASS_SIDES = ['С', 'СВ', 'В', 'ЮВ', 'Ю', 'ЮЗ', 'З', 'СЗ'] as const

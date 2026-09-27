@@ -76,13 +76,14 @@ export const useUnitsStore = defineStore('units', {
     async load() {
       if (this.loaded || this.loading) return
       this.loading = true
-      const [projects, buildings, units, queue] = await Promise.all([
-        repo.fetchProjects(), repo.fetchBuildings(), repo.fetchUnits(), repo.fetchQueue(),
+      const [projects, buildings, units, queue, unitHistory] = await Promise.all([
+        repo.fetchProjects(), repo.fetchBuildings(), repo.fetchUnits(), repo.fetchQueue(), repo.fetchUnitHistory(),
       ])
       this.projects = projects
       this.buildings = buildings
       this.units = units
       this.queue = queue
+      this.unitHistory = unitHistory
       this.loaded = true
       this.loading = false
     },
@@ -169,8 +170,8 @@ export const useUnitsStore = defineStore('units', {
     },
 
     // --- проекты (ЖК) ---
-    createProject(data: Omit<Project, 'id' | 'buildingIds' | 'archived' | 'media' | 'masterPlans'>) {
-      const project: Project = { ...data, id: uid('proj'), buildingIds: [], archived: false, media: [], masterPlans: [] }
+    createProject(data: Omit<Project, 'id' | 'buildingIds' | 'archived' | 'media' | 'masterPlans' | 'masterPlanZones'>) {
+      const project: Project = { ...data, id: uid('proj'), buildingIds: [], archived: false, media: [], masterPlans: [], masterPlanZones: [] }
       this.projects.unshift(project)
       repo.saveProject(project)
       return project
@@ -199,6 +200,13 @@ export const useUnitsStore = defineStore('units', {
       const p = this.project(projectId)
       if (!p) return
       p.masterPlans.unshift({ ...file, id: uid('genplan'), kind: 'photo', addedAt: new Date().toISOString() })
+    },
+    /** Разметка домов на генплане — с неё начинается навигация по проекту. */
+    setMasterPlanZones(projectId: string, zones: ImageZone[]) {
+      const p = this.project(projectId)
+      if (!p) return
+      p.masterPlanZones = zones
+      repo.saveProject(p)
     },
     removeMasterPlan(projectId: string, assetId: string) {
       const p = this.project(projectId)

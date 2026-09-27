@@ -51,8 +51,24 @@ function zoneRoom(refId: string) {
 }
 const canEdit = computed(() => unit.value?.status !== 'sold' && unit.value?.status !== 'installment')
 
-const tab = ref<'params' | 'explication' | 'plan'>('params')
-watch(() => props.unitId, () => { tab.value = 'params' })
+type UnitTab = 'params' | 'deal' | 'explication' | 'plan' | 'history'
+const tab = ref<UnitTab>('params')
+// у занятого помещения первым делом смотрят сделку, у свободного — параметры
+watch(() => props.unitId, () => {
+  tab.value = unit.value?.contractId || reservation.value ? 'deal' : 'params'
+})
+
+const priceChanges = computed(() => (props.unitId
+  ? unitsStore.historyFor(props.unitId).filter((h) => h.kind === 'price').length
+  : 0))
+
+const tabs = computed(() => [
+  { value: 'params', label: 'Параметры', icon: 'ph:sliders-horizontal' },
+  { value: 'deal', label: 'Сделка', icon: 'ph:handshake' },
+  { value: 'explication', label: 'Экспликация', icon: 'ph:list-numbers', count: explication.value.rooms.length || undefined },
+  { value: 'plan', label: 'На плане', icon: 'ph:polygon' },
+  { value: 'history', label: 'История цены', icon: 'ph:chart-line-up', count: priceChanges.value || undefined },
+])
 
 const finishingOptions = [
   { value: 'none', label: 'Без отделки' }, { value: 'rough', label: 'Черновая' },
@@ -218,13 +234,7 @@ function setStatus(status: UnitStatus) {
         <span v-if="!unit.imageUrl && preset?.imageUrl" class="absolute bottom-2 left-2 rounded-full bg-ink/65 px-2 py-1 text-[11px] font-medium text-white">из планировки «{{ preset.name }}»</span>
       </div>
 
-      <Tabs
-        v-model="tab" class="mt-4" :tabs="[
-          { value: 'params', label: 'Параметры', icon: 'ph:sliders-horizontal' },
-          { value: 'explication', label: 'Экспликация', icon: 'ph:list-numbers', count: explication.rooms.length || undefined },
-          { value: 'plan', label: 'На плане этажа', icon: 'ph:polygon' },
-        ]"
-      />
+      <Tabs :model-value="tab" class="mt-4" :tabs="tabs" @update:model-value="tab = $event as UnitTab" />
 
       <!-- параметры -->
       <div v-if="tab === 'params'" class="pt-4">
@@ -266,6 +276,16 @@ function setStatus(status: UnitStatus) {
           </div>
         </dl>
         <p v-if="!canEdit" class="mt-2.5 flex items-center gap-1.5 text-[11.5px] text-muted"><Icon name="ph:lock-simple" size="13" /> Проданные помещения не редактируются — правки через договор</p>
+      </div>
+
+      <!-- сделка: клиент, договор, деньги и график без ухода со страницы -->
+      <div v-else-if="tab === 'deal'" class="pt-4">
+        <UnitDealCard :unit="unit" />
+      </div>
+
+      <!-- история цены -->
+      <div v-else-if="tab === 'history'" class="pt-4">
+        <UnitPriceHistory :unit="unit" />
       </div>
 
       <!-- экспликация -->

@@ -10,13 +10,15 @@ import { explicationTotals, roomLabel } from '~/utils/explication'
  * План этажа как рабочий инструмент: переключение этажей, масштаб, экспликация
  * выбранной квартиры рядом с чертежом. Выделение общее с шахматкой и фасадом.
  */
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   scopeKey: string
   building: Building
   units: Unit[]
   matchIds: Set<string>
   scores?: Map<string, MatchedUnit>
-}>()
+  /** подсказка при наведении; гасим, пока открыта мини-карточка */
+  tooltip?: boolean
+}>(), { tooltip: true })
 const emit = defineEmits<{ open: [string] }>()
 
 const board = useBoardStore()
@@ -118,7 +120,7 @@ const floorStats = computed(() => {
     <div class="min-w-0 flex-1">
       <template v-if="plan?.imageUrl">
         <UnitZoneCanvas
-          :image-url="plan.imageUrl" :marks="marks" :highlight-id="hoverId"
+          :image-url="plan.imageUrl" :marks="marks" :highlight-id="hoverId" :tooltip="tooltip"
           @pick="emit('open', $event)" @toggle="board.toggleSelect(scopeKey, $event)" @hover="hoverId = $event"
         >
           <template #actions>

@@ -7,16 +7,24 @@ import type { MatchedUnit } from '~/composables/useLeadMatching'
  * под уровнем земли. Вынесена из страницы, потому что тот же разрез нужен в
  * карточке заявки и в мастере сделок.
  */
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   scopeKey: string
   units: Unit[]
   matchIds: Set<string>
   scores?: Map<string, MatchedUnit>
-}>()
+  /** подсказка при наведении; гасим, пока открыта мини-карточка */
+  tooltip?: boolean
+}>(), { tooltip: true })
 const emit = defineEmits<{ open: [string] }>()
 
 const board = useBoardStore()
+const unitsStore = useUnitsStore()
 const scope = computed(() => board.scope(props.scopeKey))
+
+/** Очередь на объект — на ячейке это знак «спрос есть, торопись». */
+function queueOf(unitId: string) {
+  return unitsStore.queueFor(unitId).length
+}
 const large = computed(() => scope.value.cellSize === 'large')
 const selected = computed(() => new Set(scope.value.selected))
 
@@ -121,7 +129,7 @@ function onMove(e: MouseEvent) {
             <UnitCell
               v-for="u in s.byFloor.get(f) ?? []" :key="u.id" :unit="u" :large="large" :mode="scope.colorMode"
               :dim="!matchIds.has(u.id)" :highlighted="hoveredKey === layoutKey(u)"
-              :selected="selected.has(u.id)" :score="scores?.get(u.id)?.score"
+              :selected="selected.has(u.id)" :score="scores?.get(u.id)?.score" :queue="queueOf(u.id)"
               @click="onCellClick(u, $event)" @hover="onHover(u, $event)" @move="onMove" @leave="hoveredUnit = null"
             />
           </div>
@@ -151,7 +159,7 @@ function onMove(e: MouseEvent) {
             <UnitCell
               v-for="u in group.list" :key="u.id" :unit="u" :large="large" :mode="scope.colorMode"
               :dim="!matchIds.has(u.id)" :highlighted="hoveredKey === layoutKey(u)"
-              :selected="selected.has(u.id)" :score="scores?.get(u.id)?.score"
+              :selected="selected.has(u.id)" :score="scores?.get(u.id)?.score" :queue="queueOf(u.id)"
               @click="onCellClick(u, $event)" @hover="onHover(u, $event)" @move="onMove" @leave="hoveredUnit = null"
             />
           </div>
@@ -159,6 +167,9 @@ function onMove(e: MouseEvent) {
       </div>
     </div>
 
-    <UnitTooltip :unit="hoveredUnit" :x="hoverPos.x" :y="hoverPos.y" :score="hoveredUnit ? scores?.get(hoveredUnit.id) : undefined" />
+    <UnitTooltip
+      :unit="tooltip ? hoveredUnit : null" :x="hoverPos.x" :y="hoverPos.y"
+      :score="hoveredUnit ? scores?.get(hoveredUnit.id) : undefined"
+    />
   </div>
 </template>

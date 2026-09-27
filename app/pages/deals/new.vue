@@ -137,7 +137,10 @@ function reset() {
         <AppButton size="sm" icon="ph:x" @click="selectedUnitId = ''">Сбросить</AppButton>
       </div>
 
-      <UnitPicker :scope-key="pickerScope" :lead-id="fromLeadId || undefined" @open="selectedUnitId = $event" />
+      <UnitPicker
+        :scope-key="pickerScope" :lead-id="fromLeadId || undefined"
+        @open="selectedUnitId = $event" @contract="selectedUnitId = $event" @reserve="selectedUnitId = $event"
+      />
 
       <div class="mt-4 flex justify-end"><AppButton variant="primary" icon-right="ph:arrow-right" @click="next">Далее</AppButton></div>
     </AppCard>

@@ -267,3 +267,77 @@ export function documentImage(title: string, lines: string[], accent = '#6E4453'
   parts.push(`<text x="${W - 300}" y="${H - 124}" font-family="Onest, sans-serif" font-size="15" fill="#8A8390">Дата</text>`)
   return svgUri(W, H, parts.join(''))
 }
+
+/* --------------------------------- генплан -------------------------------- */
+
+// Пятна домов на генплане. Геометрия вынесена так же, как у фасада: одна
+// функция рисует картинку, она же отдаёт контуры — области на плане ложатся
+// ровно по нарисованным корпусам, а не «примерно туда».
+const PLOT = { x: 0.06, y: 0.12, w: 0.88, h: 0.76 }
+
+export function masterPlanFootprint(index: number, total: number) {
+  const cols = Math.min(total, 3)
+  const rows = Math.ceil(total / cols)
+  const col = index % cols
+  const row = Math.floor(index / cols)
+  const cellW = PLOT.w / cols
+  const cellH = PLOT.h / rows
+  const padX = cellW * 0.16
+  const padY = cellH * 0.22
+  return {
+    x: PLOT.x + cellW * col + padX,
+    y: PLOT.y + cellH * row + padY,
+    w: cellW - padX * 2,
+    h: cellH - padY * 2,
+  }
+}
+
+export function masterPlanImage(buildings: { name: string; floors: number }[]) {
+  const W = 1600
+  const H = 900
+  const parts: string[] = []
+
+  parts.push(`<defs>
+    <linearGradient id="ground" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#E7E3DB"/><stop offset="1" stop-color="#DCD7CD"/>
+    </linearGradient>
+    <linearGradient id="roof" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#8E8794"/><stop offset="1" stop-color="#6F6876"/>
+    </linearGradient>
+  </defs>`)
+  parts.push(`<rect width="${W}" height="${H}" fill="url(#ground)"/>`)
+
+  // зелёные зоны и проезды
+  parts.push(`<rect x="0" y="${H * 0.88}" width="${W}" height="${H * 0.12}" fill="#CFC8BE"/>`)
+  parts.push(`<rect x="${W * 0.02}" y="${H * 0.02}" width="${W * 0.96}" height="${H * 0.84}" rx="26" fill="#DFE6D8"/>`)
+  parts.push(`<path d="M ${W * 0.02} ${H * 0.5} H ${W * 0.98}" stroke="#C8C1B6" stroke-width="26" stroke-linecap="round"/>`)
+  parts.push(`<path d="M ${W * 0.5} ${H * 0.04} V ${H * 0.84}" stroke="#C8C1B6" stroke-width="20" stroke-linecap="round" opacity=".7"/>`)
+  for (let i = 0; i < 16; i++) {
+    const cx = W * 0.05 + (i % 8) * W * 0.125
+    const cy = i < 8 ? H * 0.08 : H * 0.8
+    parts.push(`<circle cx="${cx}" cy="${cy}" r="${22 + (i % 3) * 6}" fill="#8FAE85" opacity=".85"/>`)
+  }
+  // детская и спортивная площадки
+  parts.push(`<rect x="${W * 0.44}" y="${H * 0.56}" width="${W * 0.12}" height="${H * 0.14}" rx="14" fill="#E3D2B5"/>`)
+  parts.push(`<text x="${W * 0.5}" y="${H * 0.64}" text-anchor="middle" font-family="Onest, sans-serif" font-size="15" fill="#8A8390">двор</text>`)
+
+  buildings.forEach((b, i) => {
+    const f = masterPlanFootprint(i, buildings.length)
+    const x = f.x * W
+    const y = f.y * H
+    const w = f.w * W
+    const h = f.h * H
+    // тень и объём: крыша светлее торца, дом читается как объём, а не заливка
+    parts.push(`<rect x="${x + 10}" y="${y + 14}" width="${w}" height="${h}" rx="10" fill="#000" opacity=".12"/>`)
+    parts.push(`<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="10" fill="url(#roof)"/>`)
+    parts.push(`<rect x="${x + w * 0.06}" y="${y + h * 0.1}" width="${w * 0.88}" height="${h * 0.8}" rx="6" fill="#A39CA8" opacity=".55"/>`)
+    for (let s = 1; s < 4; s++) {
+      parts.push(`<path d="M ${x + (w / 4) * s} ${y + h * 0.1} V ${y + h * 0.9}" stroke="#7B7482" stroke-width="2" opacity=".6"/>`)
+    }
+    // имя и остаток подписывает интерфейс поверх плана: на картинке они
+    // устарели бы в тот же день, да и две подписи на одном пятне — мусор
+    parts.push(`<text x="${x + w / 2}" y="${y + h - 14}" text-anchor="middle" font-family="Onest, sans-serif" font-size="13" fill="#FFFFFF" opacity=".5">${b.floors} эт.</text>`)
+  })
+
+  return svgUri(W, H, parts.join(''))
+}

@@ -33,7 +33,9 @@ const props = withDefaults(defineProps<{
   showLabels?: boolean
   /** клик по контуру переключает выделение, а не открывает карточку */
   multi?: boolean
-}>(), { height: 'min(62vh, 620px)', showLabels: true, multi: false })
+  /** подсказка при наведении; гасим, пока открыта мини-карточка */
+  tooltip?: boolean
+}>(), { height: 'min(62vh, 620px)', showLabels: true, multi: false, tooltip: true })
 
 const emit = defineEmits<{
   pick: [string]
@@ -266,7 +268,7 @@ const fillOpacity = (m: ZoneMark) => {
 
       <!-- подсказка -->
       <div
-        v-if="hoverMark && tipPos"
+        v-if="hoverMark && tipPos && tooltip"
         class="pointer-events-none absolute z-20 w-[210px] rounded-xl2 border border-line bg-panel p-2.5 shadow-pop"
         :style="{
           left: `${Math.min(tipPos.x + 14, (wrapRef?.clientWidth ?? 400) - 220)}px`,
