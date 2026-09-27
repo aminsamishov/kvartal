@@ -7,14 +7,22 @@ definePageMeta({ breadcrumb: [{ label: 'Платежи' }, { label: 'Доска 
 const dealsStore = useDealsStore()
 const salesStore = useSalesStore()
 const ui = useUiStore()
+const { can, seesEveryone, myId } = useAccess()
 
 const buckets = ['soon', 'today', 'd1_7', 'd8_30', 'd30_plus'] as const
 
-function contractsIn(bucket: (typeof buckets)[number]) {
-  return dealsStore.contracts.filter((c) => c.status === 'active' && dealsStore.paymentBoardBucket(c.id) === bucket)
+/** Менеджеру доска показывает платежи его клиентов, финансам — все. */
+function mine(contract: { leadId?: string }) {
+  if (seesEveryone.value) return true
+  return Boolean(contract.leadId && salesStore.lead(contract.leadId)?.assignedTo === myId.value)
 }
 
-const pending = computed(() => dealsStore.pendingPayments)
+function contractsIn(bucket: (typeof buckets)[number]) {
+  return dealsStore.contracts.filter((c) => c.status === 'active' && mine(c) && dealsStore.paymentBoardBucket(c.id) === bucket)
+}
+
+const canConfirm = computed(() => can('payments.confirm'))
+const pending = computed(() => (canConfirm.value ? dealsStore.pendingPayments : []))
 
 async function confirm(id: string) {
   await dealsStore.confirmPayment(id)

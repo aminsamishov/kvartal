@@ -26,6 +26,8 @@ export default defineNuxtConfig({
     { path: '~/components/leads', pathPrefix: false },
     { path: '~/components/clients', pathPrefix: false },
     { path: '~/components/settings', pathPrefix: false },
+    { path: '~/components/agenda', pathPrefix: false },
+    { path: '~/components/calendar', pathPrefix: false },
   ],
 
   icon: {

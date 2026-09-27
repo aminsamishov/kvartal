@@ -7,6 +7,7 @@ import { buildClientProfile, type ClientProfile, type ProfileSources } from '~/u
  */
 export function useClientProfiles() {
   const salesStore = useSalesStore()
+  const { seesEveryone, myId } = useAccess()
   const dealsStore = useDealsStore()
   const unitsStore = useUnitsStore()
   const settingsStore = useSettingsStore()
@@ -24,8 +25,13 @@ export function useClientProfiles() {
     now: new Date(),
   }))
 
-  const profiles = computed<ClientProfile[]>(() =>
+  const all = computed<ClientProfile[]>(() =>
     salesStore.clients.map((c) => buildClientProfile(c, sources.value)))
+
+  /** Менеджеру — его покупатели: чужое досье он открывать не должен. */
+  const profiles = computed<ClientProfile[]>(() => (seesEveryone.value
+    ? all.value
+    : all.value.filter((p) => p.manager?.id === myId.value || p.leads.some((l) => l.assignedTo === myId.value))))
 
   const byId = computed(() => new Map(profiles.value.map((p) => [p.client.id, p])))
 

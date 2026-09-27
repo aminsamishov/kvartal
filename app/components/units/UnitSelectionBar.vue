@@ -40,6 +40,10 @@ const unitsStore = useUnitsStore()
 const misc = useMiscStore()
 const auth = useAuthStore()
 const ui = useUiStore()
+const { can } = useAccess()
+
+/** Статус помещения меняет продавец, цену — только тот, кто ведёт прайс. */
+const canPrice = computed(() => can('unit.editPrice'))
 
 const scope = computed(() => board.scope(props.scopeKey))
 const selectedUnits = computed(() => scope.value.selected
@@ -233,7 +237,7 @@ function exportSelection() {
             </Transition>
           </div>
 
-          <div ref="priceRoot" class="relative">
+          <div v-if="canPrice" ref="priceRoot" class="relative">
             <AppButton size="sm" icon="ph:tag" @click="priceOpen = !priceOpen">Цена</AppButton>
             <Transition enter-active-class="animate-pop-in">
               <div v-if="priceOpen" class="absolute bottom-10 left-0 z-40 w-[268px] rounded-card border border-line bg-panel p-3 shadow-panel">

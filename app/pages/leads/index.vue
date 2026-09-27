@@ -39,9 +39,12 @@ function resetFilters() {
   filters.mine = false
 }
 
+const { seesEveryone } = useAccess()
 const managers = computed(() => settingsStore.users.filter((u) => u.active && ['manager', 'commercial_director', 'director'].includes(u.role)))
 
 const filtered = computed(() => salesStore.leads.filter((l) => {
+  // менеджер работает своими заявками; руководителю видна вся воронка
+  if (!seesEveryone.value && l.assignedTo !== auth.user?.id) return false
   if (filters.mine && l.assignedTo !== auth.user?.id) return false
   if (filters.assignedTo && l.assignedTo !== filters.assignedTo) return false
   if (filters.source && l.source !== filters.source) return false

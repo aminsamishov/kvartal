@@ -15,6 +15,7 @@ const board = useBoardStore()
 const unitsStore = useUnitsStore()
 const salesStore = useSalesStore()
 const ui = useUiStore()
+const { can } = useAccess()
 
 const SCOPE = 'board'
 const scope = computed(() => board.scope(SCOPE))
@@ -75,7 +76,7 @@ const expiring = computed(() => salesStore.activeReservations
     </PageHeader>
 
     <UnitPicker
-      :scope-key="SCOPE" :project-id="projectId" can-edit
+      :scope-key="SCOPE" :project-id="projectId" :can-edit="can('unit.editStatus')"
       @open="activeUnitId = $event"
       @reserve="activeUnitId = $event"
       @contract="goContract"

@@ -9,8 +9,17 @@ import { UNIT_BOARD_COLOR } from '~/utils/meta'
 import { AGENT_NAMES, FIRST_NAMES_F, FIRST_NAMES_M, LAST_NAMES_F, LAST_NAMES_M, LEAD_SOURCES } from './names'
 import { documentImage, facadeFloorBand, facadeImage, floorPlanImage, floorPlateApartments, masterPlanFootprint, masterPlanImage, unitLayoutImage, unitLayoutRects } from './placeholders'
 
-// "Сегодня" зафиксировано, чтобы график/просрочки были стабильны между рендерами.
-export const TODAY = new Date('2026-09-23T09:00:00+06:00')
+/**
+ * «Сегодня» демо-данных. Внутри дня дата фиксирована — графики и просрочки не
+ * пляшут между рендерами, — но сам день берётся текущий: иначе через неделю
+ * после сборки лента дня пустеет, а все задачи оказываются просроченными.
+ * Опорная дата держит порядок, если система запущена с часами в прошлом.
+ */
+const ANCHOR = new Date('2026-09-23T09:00:00+06:00')
+const REAL = new Date()
+export const TODAY = REAL > ANCHOR
+  ? new Date(REAL.getFullYear(), REAL.getMonth(), REAL.getDate(), 9, 0, 0)
+  : ANCHOR
 const DAY = 86400000
 export function addDays(d: Date | string, n: number) {
   const base = typeof d === 'string' ? new Date(d) : d
@@ -479,7 +488,8 @@ function build() {
   // графиков и просрочек, но бронь на сутки, посчитанная от него, к моменту
   // открытия демо давно истекла бы — и половина этапа «Бронь» осталась бы
   // без самой брони.
-  const reserveBase = new Date(Math.max(TODAY.getTime(), Date.now()))
+  // брони живут от «сегодня», иначе короткая бронь умирает на первой загрузке
+  const reserveBase = TODAY
   const reservations: Reservation[] = []
   const reservedUnits = units.filter((u) => u.status === 'reserved')
   reservedUnits.forEach((u, idx) => {

@@ -3,6 +3,15 @@ import { NAV, type NavAccent } from '~/data/nav'
 
 const ui = useUiStore()
 const route = useRoute()
+const { can } = useAccess()
+
+/**
+ * Меню показывает только то, что роли доступно: пункт, который при нажатии
+ * отправляет обратно на дашборд, хуже, чем его отсутствие.
+ */
+const groups = computed(() => NAV
+  .map((g) => ({ ...g, items: g.items.filter((i) => !i.can || can(i.can)) }))
+  .filter((g) => g.items.length))
 
 function isActive(to: string) {
   if (to === '/') return route.path === '/'
@@ -38,7 +47,7 @@ const ACCENT: Record<NavAccent, string> = {
     </div>
 
     <nav class="flex-1 space-y-4 px-2.5 pb-4">
-      <div v-for="(group, gi) in NAV" :key="gi">
+      <div v-for="(group, gi) in groups" :key="gi">
         <p v-if="group.label && !ui.sidebarCollapsed" class="mb-1 mt-2 px-2.5 text-[10.5px] font-bold uppercase tracking-wider text-side-ink/50">
           {{ group.label }}
         </p>

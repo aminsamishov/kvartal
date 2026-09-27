@@ -8,11 +8,19 @@ definePageMeta({ breadcrumb: [{ label: 'Договоры' }, { label: 'Спис�
 const dealsStore = useDealsStore()
 const salesStore = useSalesStore()
 const unitsStore = useUnitsStore()
+const { seesEveryone, myId } = useAccess()
+
+/** Менеджер работает своими сделками: чужие договоры ему не показываем. */
+function mine(contract: { leadId?: string }) {
+  if (seesEveryone.value) return true
+  return Boolean(contract.leadId && salesStore.lead(contract.leadId)?.assignedTo === myId.value)
+}
 
 const search = ref('')
 const statusFilter = ref<ContractStatus | ''>('')
 
 const rows = computed(() => dealsStore.contracts
+  .filter(mine)
   .filter((c) => (!statusFilter.value || c.status === statusFilter.value))
   .filter((c) => !search.value || c.number.toLowerCase().includes(search.value.toLowerCase()) || salesStore.client(c.clientId)?.name.toLowerCase().includes(search.value.toLowerCase()))
   .sort((a, b) => b.createdAt.localeCompare(a.createdAt)))

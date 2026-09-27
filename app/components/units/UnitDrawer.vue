@@ -49,7 +49,11 @@ function onRoomZones(zones: import('~/types/models').ImageZone[]) {
 function zoneRoom(refId: string) {
   return explication.value.rooms.find((r) => r.id === refId)
 }
-const canEdit = computed(() => unit.value?.status !== 'sold' && unit.value?.status !== 'installment')
+const { can } = useAccess()
+const canEdit = computed(() => can('unit.editStatus')
+  && unit.value?.status !== 'sold' && unit.value?.status !== 'installment')
+/** Цена — прайс, а не карточка: менеджер её видит, но не правит. */
+const canPrice = computed(() => canEdit.value && can('unit.editPrice'))
 
 type UnitTab = 'params' | 'deal' | 'explication' | 'plan' | 'history'
 const tab = ref<UnitTab>('params')
@@ -253,7 +257,7 @@ function setStatus(status: UnitStatus) {
           </label>
           <label class="flex flex-col gap-1 text-[11px] font-medium uppercase tracking-[0.03em] text-muted">
             Цена, {{ project?.currency }}
-            <input type="number" :value="unit.price" :disabled="!canEdit" class="focus-ring tabular rounded-lg border border-line bg-panel px-2.5 py-1.5 text-[14px] font-semibold text-ink disabled:opacity-60" @change="patchField('price', ($event.target as HTMLInputElement).value)">
+            <input type="number" :value="unit.price" :disabled="!canPrice" class="focus-ring tabular rounded-lg border border-line bg-panel px-2.5 py-1.5 text-[14px] font-semibold text-ink disabled:opacity-60" @change="patchField('price', ($event.target as HTMLInputElement).value)">
           </label>
           <label class="col-span-2 flex flex-col gap-1 text-[11px] font-medium uppercase tracking-[0.03em] text-muted">
             Отделка
