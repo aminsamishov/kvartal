@@ -70,6 +70,26 @@ export function runAutomations() {
     }
   }
 
+  /**
+   * Сверка фонда с бронями: помещение не может висеть «в брони» без активной
+   * брони. Такое состояние возникает от прерванной операции или испорченных
+   * данных и молча блокирует продажу — поэтому чиним при каждом входе.
+   */
+  let repaired = 0
+  for (const unit of units.units) {
+    if (unit.status !== 'reserved') continue
+    if (sales.reservationForUnit(unit.id)) continue
+    const offered = settings.automations.reservationExpiry && settings.reservationSettings.autoQueueTransfer
+      ? sales.offerUnitToQueue(unit.id, 'Автоматизация')
+      : null
+    if (!offered) {
+      units.setStatus(unit.id, 'free', 'Автоматизация')
+      delete unit.reservationId
+    }
+    repaired++
+  }
+  if (repaired) misc.log('Автоматизации', `Освобождено помещений без активной брони: ${repaired}`, 'Система')
+
   let overdue = 0
   if (settings.automations.overdueAlert) {
     for (const contract of deals.contracts) {
@@ -85,5 +105,5 @@ export function runAutomations() {
     }
   }
 
-  return { expired, overdue }
+  return { expired, overdue, repaired }
 }

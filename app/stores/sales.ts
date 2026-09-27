@@ -85,8 +85,10 @@ export const useSalesStore = defineStore('sales', {
       this.leads = leads
       this.reservations = reservations
       this.documents = documents
-      // просроченные брони снимаем при входе: иначе фонд блокируется молча
-      this.expireReservations()
+      // Снятие просроченных броней живёт в автоматизациях и запускается, когда
+      // загружены все сторы. Здесь его быть не должно: сторы грузятся
+      // параллельно, и раньше бронь снималась до того, как приезжал фонд —
+      // объект оставался со статусом «Бронь», но уже без самой брони.
       this.loaded = true
       this.loading = false
     },

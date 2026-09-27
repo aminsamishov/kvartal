@@ -29,7 +29,17 @@ export default defineNuxtConfig({
 
   icon: {
     mode: 'svg',
-    collections: ['ph'],
+    // Иконки должны быть в бандле, а не приходить из интернета: по умолчанию
+    // Nuxt Icon ходит в api.iconify.design, и в закрытом контуре застройщика
+    // (или просто без сети) интерфейс остаётся без единой иконки.
+    // scan собирает в клиентский бандл только те имена, что реально
+    // встречаются в исходниках, serverBundle оставляем запасным путём.
+    clientBundle: {
+      scan: { globInclude: ['app/**/*.{vue,ts}'] },
+      includeCustomCollections: true,
+    },
+    serverBundle: { collections: ['ph'] },
+    fallbackToApi: false,
   },
 
   app: {

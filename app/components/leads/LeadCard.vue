@@ -8,6 +8,7 @@ const emit = defineEmits<{ open: [string] }>()
 
 const salesStore = useSalesStore()
 const unitsStore = useUnitsStore()
+const dealsStore = useDealsStore()
 const settingsStore = useSettingsStore()
 const { draggingId, start, end } = useLeadDnd()
 
@@ -35,6 +36,48 @@ function taskLabel() {
   if (diff === 1) return 'Завтра'
   return fmtDate(task.value.dueAt)
 }
+
+/**
+ * Состояние сделки прямо на карточке: бронь с остатком времени или договор
+ * с погашением. Чтобы ответить «а он вообще платит?», менеджер больше не
+ * открывает раздел договоров — на доске это видно сразу.
+ */
+const reservation = computed(() => salesStore.activeReservationForLead(props.lead.id))
+const contract = computed(() => dealsStore.contractsForLead(props.lead.id)[0])
+const balance = computed(() => (contract.value ? dealsStore.balance(contract.value.id) : null))
+
+const deal = computed(() => {
+  if (contract.value && balance.value) {
+    const paidPct = balance.value.price ? Math.round((balance.value.paid / balance.value.price) * 100) : 0
+    return {
+      kind: 'contract' as const,
+      title: contract.value.number,
+      note: balance.value.overdueAmount
+        ? `просрочка ${balance.value.overdueDays} дн.`
+        : `оплачено ${paidPct}%`,
+      percent: paidPct,
+      tone: balance.value.overdueAmount ? 'bad' : 'ok',
+    }
+  }
+  if (reservation.value) {
+    const unit = unitsStore.unit(reservation.value.unitId)
+    const left = Math.max(0, Math.ceil((new Date(reservation.value.expiresAt).getTime() - Date.now()) / 86400000))
+    return {
+      kind: 'reservation' as const,
+      title: unit ? `Бронь № ${unit.number}` : 'Бронь',
+      note: left ? `${left} дн. до снятия` : 'истекает сегодня',
+      percent: null,
+      tone: left <= 1 ? 'bad' : 'warn',
+    }
+  }
+  return null
+})
+
+const DEAL_TONE = {
+  ok: 'border-ok/40 bg-ok-bg/50 text-ok',
+  warn: 'border-warn/40 bg-warn-bg/50 text-warn',
+  bad: 'border-bad/40 bg-bad-bg/50 text-bad',
+} as const
 
 // «висит долго» считаем только для активных этапов: у сделки и отказа
 // счётчик простоя смысла не имеет
@@ -77,6 +120,18 @@ const stale = computed(() => days.value >= 7 && props.lead.stage !== 'deal' && p
       <Icon name="ph:door" size="12" class="shrink-0" />
       <span class="truncate">{{ units.map((u) => `№ ${u!.number}`).join(', ') }}</span>
     </p>
+
+    <!-- сделка: бронь или договор -->
+    <div v-if="deal" class="mt-2 rounded-lg border px-2 py-1" :class="DEAL_TONE[deal.tone as keyof typeof DEAL_TONE]">
+      <p class="flex items-center gap-1.5 text-[11px] font-semibold">
+        <Icon :name="deal.kind === 'contract' ? 'ph:file-text' : 'ph:bookmark-simple'" size="12" class="shrink-0" />
+        <span class="truncate">{{ deal.title }}</span>
+        <span class="tabular ml-auto shrink-0 whitespace-nowrap">{{ deal.note }}</span>
+      </p>
+      <span v-if="deal.percent !== null" class="mt-1 block h-[3px] w-full overflow-hidden rounded-full bg-panel/70">
+        <span class="block h-full rounded-full bg-current" :style="{ width: `${deal.percent}%` }" />
+      </span>
+    </div>
 
     <!-- причина отказа вместо задачи -->
     <p v-if="lead.stage === 'lost' && lead.lostReason" class="mt-2 flex items-center gap-1.5 rounded-lg bg-bad-bg px-2 py-1 text-[11px] font-medium text-bad">

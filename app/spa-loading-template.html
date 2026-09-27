@@ -1,0 +1,60 @@
+<!--
+  Экран до гидратации приложения. Показывается, пока браузер ещё не выполнил
+  JS: без него первые секунды холодной загрузки — просто пустой фон, что
+  читается как «не работает». Стили инлайновые: файл стилей в этот момент
+  ещё может быть не применён.
+-->
+<div class="kv-boot" aria-label="Загрузка">
+  <aside class="kv-boot__side">
+    <div class="kv-boot__logo"></div>
+    <span class="kv-sk kv-boot__nav"></span>
+    <span class="kv-sk kv-boot__nav"></span>
+    <span class="kv-sk kv-boot__nav kv-boot__nav--short"></span>
+    <span class="kv-sk kv-boot__nav"></span>
+    <span class="kv-sk kv-boot__nav kv-boot__nav--short"></span>
+    <span class="kv-sk kv-boot__nav"></span>
+  </aside>
+  <main class="kv-boot__main">
+    <div class="kv-boot__top">
+      <span class="kv-sk" style="width:190px;height:22px"></span>
+      <span class="kv-sk" style="width:150px;height:34px;margin-left:auto"></span>
+    </div>
+    <div class="kv-boot__strip">
+      <span class="kv-sk kv-boot__tile"></span>
+      <span class="kv-sk kv-boot__tile"></span>
+      <span class="kv-sk kv-boot__tile"></span>
+      <span class="kv-sk kv-boot__tile"></span>
+    </div>
+    <div class="kv-boot__row">
+      <span class="kv-sk kv-boot__card"></span>
+      <span class="kv-sk kv-boot__card kv-boot__card--narrow"></span>
+    </div>
+  </main>
+</div>
+
+<style>
+:root { --kv-bg: #F2F1EF; --kv-panel: #FFFFFF; --kv-soft: #F7F6F4; --kv-line: #E5E1DE; --kv-side: #18161B; --kv-side-line: #2B272F; --kv-plum: #6E4453; }
+@media (prefers-color-scheme: dark) {
+  :root { --kv-bg: #121114; --kv-panel: #1B191E; --kv-soft: #221F25; --kv-line: #2E2A32; --kv-side: #0E0D10; --kv-side-line: #262229; }
+}
+html, body { margin: 0; background: var(--kv-bg); }
+.kv-boot { display: flex; min-height: 100vh; font-family: 'Onest', system-ui, sans-serif; }
+.kv-boot__side { display: none; flex-direction: column; gap: 14px; width: 248px; padding: 20px 16px; background: var(--kv-side); border-right: 1px solid var(--kv-side-line); }
+@media (min-width: 1024px) { .kv-boot__side { display: flex; } }
+.kv-boot__logo { width: 36px; height: 36px; border-radius: 10px; background: var(--kv-plum); margin-bottom: 14px; }
+.kv-boot__nav { height: 14px; border-radius: 6px; }
+.kv-boot__nav--short { width: 60%; }
+.kv-boot__main { flex: 1; padding: 24px 28px; display: flex; flex-direction: column; gap: 18px; }
+.kv-boot__top { display: flex; align-items: center; gap: 12px; }
+.kv-boot__strip { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1px; background: var(--kv-line); border: 1px solid var(--kv-line); border-radius: 10px; overflow: hidden; }
+@media (min-width: 1024px) { .kv-boot__strip { grid-template-columns: repeat(4, 1fr); } }
+.kv-boot__tile { height: 92px; border-radius: 0; background: var(--kv-panel); }
+.kv-boot__row { display: flex; gap: 16px; flex-wrap: wrap; }
+.kv-boot__card { flex: 2 1 420px; height: 260px; border-radius: 10px; }
+.kv-boot__card--narrow { flex: 1 1 260px; }
+.kv-sk { position: relative; display: block; overflow: hidden; background: var(--kv-soft); border-radius: 8px; }
+.kv-boot__side .kv-sk { background: var(--kv-side-line); }
+.kv-sk::after { content: ""; position: absolute; inset: 0; transform: translateX(-100%); background: linear-gradient(90deg, transparent, rgba(128,128,128,.14), transparent); animation: kv-sweep 1.25s ease-in-out infinite; }
+@keyframes kv-sweep { 100% { transform: translateX(100%); } }
+@media (prefers-reduced-motion: reduce) { .kv-sk::after { animation: none; } }
+</style>
