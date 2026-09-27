@@ -11,6 +11,7 @@ interface StoredScope {
   buildingId: string
   colorMode: PickerScope['colorMode']
   cellSize: PickerScope['cellSize']
+  facadeMode?: PickerScope['facadeMode']
 }
 
 interface Stored {
@@ -66,6 +67,7 @@ export function restorePickerFilters() {
       scope.buildingId = value.buildingId ?? ''
       scope.colorMode = value.colorMode ?? 'status'
       scope.cellSize = value.cellSize ?? 'compact'
+      scope.facadeMode = value.facadeMode ?? 'sale'
     }
   }
 
@@ -84,6 +86,7 @@ export function restorePickerFilters() {
           buildingId: scope.buildingId,
           colorMode: scope.colorMode,
           cellSize: scope.cellSize,
+          facadeMode: scope.facadeMode,
         }
       }
       try {

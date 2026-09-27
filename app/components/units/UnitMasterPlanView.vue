@@ -16,27 +16,49 @@ const props = defineProps<{
   /** весь фонд проекта: по нему считается остаток в каждом доме */
   units: Unit[]
 }>()
-const emit = defineEmits<{ pick: [string] }>()
+const emit = defineEmits<{ pick: [string]; board: [string] }>()
 
 const board = useBoardStore()
+const unitsStore = useUnitsStore()
 const scope = computed(() => board.scope(props.scopeKey))
 
 const image = computed(() => props.project.masterPlans[0]?.url ?? null)
 
+/** Цифры дома считает стор — карточка дома и генплан обязаны совпадать. */
 function statsOf(buildingId: string) {
-  const list = props.units.filter((u) => u.buildingId === buildingId)
-  const free = list.filter((u) => u.status === 'free').length
-  const sold = list.filter((u) => u.status === 'sold' || u.status === 'installment').length
-  // «от» — про квартиры: кладовая за 970 $ в этой строке только вводит в
-  // заблуждение, клиент спрашивает про жильё
-  const prices = list.filter((u) => u.status === 'free' && u.kind === 'apartment').map((u) => u.price)
-  return {
-    total: list.length,
-    free,
-    sold,
-    soldPct: list.length ? Math.round((sold / list.length) * 100) : 0,
-    minPrice: prices.length ? Math.min(...prices) : 0,
-  }
+  return unitsStore.buildingStats(buildingId)
+}
+
+/* ------------------------- карточка дома по клику ------------------------- */
+
+const pointer = reactive({ x: 0, y: 0 })
+function trackPointer(e: PointerEvent) {
+  pointer.x = e.clientX
+  pointer.y = e.clientY
+}
+
+const cardId = ref<string | null>(null)
+const cardPos = reactive({ x: 0, y: 0 })
+
+/**
+ * Клик по дому открывает карточку, а не уводит на фасад: сначала менеджер
+ * смотрит остаток и цены, потом решает, куда идти.
+ */
+function openCard(buildingId: string) {
+  board.setBuilding(props.scopeKey, buildingId)
+  cardPos.x = pointer.x
+  cardPos.y = pointer.y
+  cardId.value = buildingId
+}
+
+function goFacade(buildingId: string) {
+  cardId.value = null
+  emit('pick', buildingId)
+}
+
+function goBoard(buildingId: string) {
+  cardId.value = null
+  emit('board', buildingId)
 }
 
 /**
@@ -75,11 +97,11 @@ function buildingOf(id: string) {
 </script>
 
 <template>
-  <div class="flex flex-col gap-3 xl:flex-row">
+  <div class="flex flex-col gap-3 xl:flex-row" @pointerdown="trackPointer">
     <div class="min-w-0 flex-1">
       <UnitZoneCanvas
         v-if="image" :image-url="image" :marks="marks" height="min(60vh, 560px)"
-        @pick="emit('pick', $event)" @toggle="emit('pick', $event)"
+        @pick="openCard" @toggle="openCard"
       >
         <template #actions>
           <span class="text-[11.5px] text-muted">{{ project.name }} · {{ buildings.length }} дома · {{ units.length }} помещений</span>
@@ -95,7 +117,7 @@ function buildingOf(id: string) {
               <div class="flex justify-between"><dt class="text-muted">Реализация</dt><dd class="tabular font-medium">{{ statsOf(mark.id).soldPct }}%</dd></div>
               <div v-if="statsOf(mark.id).minPrice" class="flex justify-between"><dt class="text-muted">От</dt><dd class="tabular font-semibold">{{ moneyCompact(statsOf(mark.id).minPrice) }}</dd></div>
             </dl>
-            <p class="mt-1 text-[11px] font-semibold text-plum">Открыть дом →</p>
+            <p class="mt-1 text-[11px] font-semibold text-plum">Клик — карточка дома</p>
           </template>
         </template>
       </UnitZoneCanvas>
@@ -116,7 +138,7 @@ function buildingOf(id: string) {
         v-for="b in buildings" :key="b.id" type="button"
         class="focus-ring rounded-card border bg-panel p-3 text-left transition-colors hover:border-plum/50"
         :class="scope.buildingId === b.id ? 'border-ink' : 'border-line'"
-        @click="emit('pick', b.id)"
+        @click="openCard(b.id)"
       >
         <div class="flex items-center justify-between gap-2">
           <p class="truncate text-[13px] font-semibold text-ink">{{ b.name }}</p>
@@ -135,5 +157,10 @@ function buildingOf(id: string) {
         </p>
       </button>
     </aside>
+
+    <BuildingMiniCard
+      v-if="cardId" :building-id="cardId" :x="cardPos.x" :y="cardPos.y"
+      @close="cardId = null" @facade="goFacade" @board="goBoard"
+    />
   </div>
 </template>

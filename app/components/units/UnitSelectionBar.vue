@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { Unit, UnitStatus } from '~/types/models'
+import type { MatchedUnit } from '~/composables/useLeadMatching'
 import { UNIT_STATUS_META } from '~/utils/meta'
 import { area as fmtArea, money, moneyCompact } from '~/utils/format'
 import { exportUnitsToXlsx, selectionSummary } from '~/utils/unitExport'
@@ -11,15 +12,28 @@ import { MAX_COMPARE } from '~/stores/board'
  *
  * Плитки выбранных квартир держим прямо в панели: сравнение начинается с
  * вопроса «что я вообще набрал», и ответ не должен требовать открытия модалки.
+ *
+ * Само сравнение тоже раскрывается здесь же, панелью снизу — как слой в Figma:
+ * квартиры остаются на экране, а разница по цене и метру появляется под ними.
  */
 const props = defineProps<{
   scopeKey: string
   units: Unit[]
   /** карточка заявки не должна давать менять цены и статусы фонда */
   canEdit?: boolean
-  scores?: Map<string, { score: number }>
+  scores?: Map<string, MatchedUnit>
+  /** раскрыта ли панель сравнения снизу */
+  comparing?: boolean
+  /** в контексте заявки в сравнении появляется кнопка брони */
+  leadId?: string
 }>()
-const emit = defineEmits<{ compare: []; reserve: [string]; contract: [string]; open: [string] }>()
+const emit = defineEmits<{
+  compare: []
+  expand: []
+  reserve: [string]
+  contract: [string]
+  open: [string]
+}>()
 
 const board = useBoardStore()
 const unitsStore = useUnitsStore()
@@ -103,6 +117,34 @@ function exportSelection() {
     enter-from-class="translate-y-4 opacity-0" leave-to-class="translate-y-4 opacity-0"
   >
     <div v-if="selectedUnits.length" class="sticky bottom-3 z-30 rounded-card border border-ink/80 bg-panel/95 shadow-pop backdrop-blur">
+      <!-- сравнение прямо в панели: квартиры остаются на экране -->
+      <Transition
+        enter-active-class="transition-all duration-200 ease-out" leave-active-class="transition-all duration-150 ease-in"
+        enter-from-class="max-h-0 opacity-0" leave-to-class="max-h-0 opacity-0"
+      >
+        <section v-if="comparing && summary.count >= 2" class="max-h-[46vh] overflow-hidden border-b border-line">
+          <header class="flex items-center gap-2 px-3 pt-2.5">
+            <h4 class="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted">
+              Сравнение · {{ Math.min(summary.count, MAX_COMPARE) }} из {{ summary.count }}
+            </h4>
+            <button
+              type="button" class="focus-ring ml-auto flex items-center gap-1 text-[11.5px] font-semibold text-muted hover:text-ink"
+              title="Открыть сравнение во весь экран" @click="emit('expand')"
+            ><Icon name="ph:arrows-out" size="13" /> Во весь экран</button>
+            <button
+              type="button" class="focus-ring grid h-6 w-6 place-items-center rounded-lg text-muted hover:text-ink"
+              title="Свернуть сравнение" @click="emit('compare')"
+            ><Icon name="ph:x" size="13" /></button>
+          </header>
+          <div class="max-h-[40vh] overflow-y-auto px-3 pb-2">
+            <UnitCompareTable
+              dense :unit-ids="scope.selected.slice(0, MAX_COMPARE)" :lead-id="leadId" :scores="scores"
+              @open="emit('open', $event)" @reserve="emit('reserve', $event)"
+            />
+          </div>
+        </section>
+      </Transition>
+
       <!-- плитки выбранного -->
       <Transition
         enter-active-class="transition-all duration-150" leave-active-class="transition-all duration-100"
@@ -153,7 +195,10 @@ function exportSelection() {
 
         <span class="h-6 w-px bg-line" />
 
-        <AppButton size="sm" icon="ph:arrows-left-right" :disabled="summary.count < 2" @click="emit('compare')">
+        <AppButton
+          size="sm" icon="ph:arrows-left-right" :variant="comparing ? 'primary' : 'default'"
+          :disabled="summary.count < 2" @click="emit('compare')"
+        >
           Сравнить <kbd class="hot">C</kbd>
         </AppButton>
         <AppButton

@@ -21,7 +21,15 @@ export interface PickerScope {
   cellSize: 'compact' | 'large'
   /** заявка, под интерес которой считается процент совпадения */
   scoreLeadId: string | null
+  /**
+   * Фасад в продаже или в разметке. В продаже менеджер видит только статусы,
+   * цены и подбор — технические слои (пунктир авторазметки, покрытие, ссылки
+   * в редактор) к разговору с клиентом отношения не имеют.
+   */
+  facadeMode: FacadeMode
 }
+
+export type FacadeMode = 'sale' | 'edit'
 
 function newScope(): PickerScope {
   return {
@@ -34,6 +42,7 @@ function newScope(): PickerScope {
     colorMode: 'status',
     cellSize: 'compact',
     scoreLeadId: null,
+    facadeMode: 'sale',
   }
 }
 
@@ -84,6 +93,9 @@ export const useBoardStore = defineStore('board', {
     },
     setCellSize(key: string, size: 'compact' | 'large') {
       this.ensure(key).cellSize = size
+    },
+    setFacadeMode(key: string, mode: FacadeMode) {
+      this.ensure(key).facadeMode = mode
     },
 
     /* ------------------------------- выделение ------------------------------ */

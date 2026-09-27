@@ -10,6 +10,11 @@ import { area as fmtArea, money, moneyCompact } from '~/utils/format'
  * Интерактивный фасад. Квартира на фасаде — тот же объект, что в шахматке:
  * цвет по статусу, клик открывает карточку, Ctrl+клик выделяет, выделение
  * общее со всеми остальными представлениями подбора.
+ *
+ * Два режима. В «Продаже» на экране только то, что показывают клиенту:
+ * статусы, цены, проценты совпадения. Технические слои — пунктир авторазметки,
+ * покрытие этажей, ссылки в редактор — живут в «Редакторе» и менеджеру во время
+ * разговора не мешают.
  */
 const props = withDefaults(defineProps<{
   scopeKey: string
@@ -20,7 +25,9 @@ const props = withDefaults(defineProps<{
   scores?: Map<string, MatchedUnit>
   /** подсказка при наведении; гасим, пока открыта мини-карточка */
   tooltip?: boolean
-}>(), { tooltip: true })
+  /** доступен ли режим разметки: в карточке заявки он ни к чему */
+  canEdit?: boolean
+}>(), { tooltip: true, canEdit: false })
 const emit = defineEmits<{ open: [string] }>()
 
 const board = useBoardStore()
@@ -37,6 +44,13 @@ watchEffect(() => {
 })
 
 const facade = computed(() => facades.value.find((f) => f.id === scope.value.facadeId))
+
+/** Без права правки разметки режим всегда «Продажа» — выбирать нечего. */
+const mode = computed(() => (props.canEdit ? scope.value.facadeMode : 'sale'))
+const MODES = [
+  { value: 'sale', label: 'Продажа', icon: 'ph:handshake' },
+  { value: 'edit', label: 'Редактор', icon: 'ph:polygon' },
+]
 const zones = computed(() => facadeUnitZones({
   facade: facade.value,
   floors: props.building.floors,
@@ -59,7 +73,9 @@ const marks = computed<ZoneMark[]>(() => zones.value.flatMap((z) => {
     sublabel: moneyCompact(unit.price),
     selected: selected.value.has(unit.id),
     dim: !props.matchIds.has(unit.id),
-    derived: z.derived,
+    // пунктир — служебная пометка «контур выведен автоматически»; в продаже он
+    // выглядит как дефект фасада, поэтому остаётся только в редакторе
+    derived: mode.value === 'edit' ? z.derived : false,
     badge: score ? `${score.score}%` : undefined,
   }]
 }))
@@ -82,16 +98,31 @@ function tipUnit(id: string) {
 function queueOf(id: string) {
   return unitsStore.queueFor(id).length
 }
+
+/** «От» и «до» по свободным квартирам ракурса — первый вопрос покупателя. */
+const priceRange = computed(() => {
+  const prices = props.units
+    .filter((u) => u.status === 'free' && u.kind === 'apartment' && props.matchIds.has(u.id))
+    .map((u) => u.price)
+  if (!prices.length) return null
+  return { min: Math.min(...prices), max: Math.max(...prices) }
+})
 </script>
 
 <template>
   <div class="flex flex-col gap-3">
-    <!-- ракурсы -->
-    <div v-if="facades.length > 1" class="flex flex-wrap gap-1.5">
-      <Chip
-        v-for="f in facades" :key="f.id" :pressed="scope.facadeId === f.id" :icon="FACADE_TAG_META[f.tag].icon"
-        @click="board.setFacade(scopeKey, f.id)"
-      >{{ f.name }}</Chip>
+    <!-- ракурсы и режим работы -->
+    <div class="flex flex-wrap items-center gap-1.5">
+      <template v-if="facades.length > 1">
+        <Chip
+          v-for="f in facades" :key="f.id" :pressed="scope.facadeId === f.id" :icon="FACADE_TAG_META[f.tag].icon"
+          @click="board.setFacade(scopeKey, f.id)"
+        >{{ f.name }}</Chip>
+      </template>
+      <SegmentedControl
+        v-if="canEdit" :model-value="mode" class="ml-auto shrink-0" :options="MODES"
+        @update:model-value="board.setFacadeMode(scopeKey, $event as 'sale' | 'edit')"
+      />
     </div>
 
     <template v-if="facade?.imageUrl">
@@ -132,14 +163,32 @@ function queueOf(id: string) {
             {{ l.label }} <b class="tabular text-ink">{{ l.count }}</b>
           </span>
         </div>
-        <p v-if="stats.derived" class="ml-auto flex items-center gap-1.5 text-[11.5px] text-muted">
-          <Icon name="ph:dashed-line" size="14" />
-          Пунктир — авторазметка по полосе этажа ({{ stats.derived }} из {{ stats.total }})
+
+        <!-- продажа: цены свободных, а не состояние разметки -->
+        <p v-if="mode === 'sale' && priceRange" class="ml-auto flex items-center gap-1.5 text-[11.5px] text-muted">
+          <Icon name="ph:tag" size="14" />
+          Свободные квартиры
+          <b class="tabular text-ink">{{ moneyCompact(priceRange.min) }}</b>
+          <template v-if="priceRange.max > priceRange.min">— <b class="tabular text-ink">{{ moneyCompact(priceRange.max) }}</b></template>
+        </p>
+
+        <!-- редактор: сколько контуров размечено руками и куда идти уточнять -->
+        <div v-else-if="mode === 'edit'" class="ml-auto flex flex-wrap items-center gap-x-3 gap-y-1 text-[11.5px] text-muted">
+          <span class="flex items-center gap-1.5">
+            <Icon name="ph:polygon" size="14" />
+            Размечено вручную <b class="tabular text-ink">{{ stats.total - stats.derived }} из {{ stats.total }}</b>
+          </span>
+          <span v-if="stats.derived" class="flex items-center gap-1.5">
+            <Icon name="ph:dashed-line" size="14" /> пунктир — авторазметка по полосе этажа
+          </span>
+          <StatusTag :tone="facade.published ? 'ok' : 'neutral'" size="sm">
+            {{ facade.published ? 'Опубликован' : 'Черновик' }}
+          </StatusTag>
           <NuxtLink
             :to="`/facades/${building.id}/${facade.id}`"
             class="font-semibold text-plum hover:underline"
-          >уточнить</NuxtLink>
-        </p>
+          >Открыть разметку</NuxtLink>
+        </div>
       </div>
     </template>
 

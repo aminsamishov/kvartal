@@ -131,6 +131,11 @@ function pickBuilding(buildingId: string) {
   board.setView(props.scopeKey, 'facade')
 }
 
+function boardBuilding(buildingId: string) {
+  board.setBuilding(props.scopeKey, buildingId)
+  board.setView(props.scopeKey, 'board')
+}
+
 /* ------------------------------ липкие фильтры ---------------------------- */
 
 // Маячок стоит над панелью: как только он уходит вверх за шапку, панель
@@ -169,6 +174,12 @@ function fromMini(action: 'open' | 'reserve' | 'contract' | 'link', unitId: stri
 
 /* -------------------------------- сравнение ------------------------------- */
 
+/**
+ * Сравнение живёт в панели снизу — как слой в Figma: шахматка остаётся на
+ * экране, разница появляется под ней. Модальное окно осталось для разбора
+ * крупных планировок с клиентом.
+ */
+const compareTray = ref(false)
 const compareOpen = ref(false)
 const compareIds = computed(() => scope.value.selected.slice(0, MAX_COMPARE))
 const lastSelected = computed(() => {
@@ -176,7 +187,13 @@ const lastSelected = computed(() => {
   return id ? unitsStore.unit(id) : undefined
 })
 
-function openCompare() {
+function toggleCompare() {
+  if (compareTray.value) { compareTray.value = false; return }
+  if (scope.value.selected.length < 2) { ui.toast('Отметьте хотя бы две квартиры — Ctrl+клик', 'warn'); return }
+  compareTray.value = true
+}
+
+function openCompareFull() {
   if (scope.value.selected.length < 2) { ui.toast('Отметьте хотя бы две квартиры — Ctrl+клик', 'warn'); return }
   compareOpen.value = true
 }
@@ -191,7 +208,7 @@ function applyInterest() {
 
 useHotkeys({
   enabled: () => !compareOpen.value,
-  compare: openCompare,
+  compare: toggleCompare,
   reserve: () => {
     const unit = lastSelected.value ?? (miniId.value ? unitsStore.unit(miniId.value) : undefined)
     if (!unit) { ui.toast('Отметьте квартиру — Ctrl+клик по ячейке', 'info'); return }
@@ -205,6 +222,7 @@ useHotkeys({
   },
   escape: () => {
     if (miniId.value) closeMini()
+    else if (compareTray.value) compareTray.value = false
     else if (scope.value.selected.length) board.clearSelection(props.scopeKey)
   },
 })
@@ -213,6 +231,8 @@ useHotkeys({
 // разных ЖК менеджер не просит, а «призрачные» отметки сбивают счётчик
 watch(projectId, () => board.clearSelection(props.scopeKey))
 watch(() => scope.value.view, closeMini)
+// сравнивать нечего — панель закрывается сама, иначе она висит пустой
+watch(() => scope.value.selected.length, (n) => { if (n < 2) compareTray.value = false })
 </script>
 
 <template>
@@ -284,7 +304,7 @@ watch(() => scope.value.view, closeMini)
     <UnitMasterPlanView
       v-if="scope.view === 'master' && project"
       :scope-key="scopeKey" :project="project" :buildings="buildings" :units="projectUnits"
-      @pick="pickBuilding"
+      @pick="pickBuilding" @board="boardBuilding"
     />
 
     <template v-else-if="building">
@@ -313,6 +333,7 @@ watch(() => scope.value.view, closeMini)
       <UnitFacadeView
         v-else-if="scope.view === 'facade'"
         :scope-key="scopeKey" :building="building" :units="units" :match-ids="matchIds" :scores="scores" :tooltip="!miniId"
+        :can-edit="canEdit"
         @open="onUnitClick"
       />
       <UnitFloorPlanView
@@ -331,7 +352,9 @@ watch(() => scope.value.view, closeMini)
 
     <UnitSelectionBar
       :scope-key="scopeKey" :units="units" :can-edit="canEdit" :scores="scores"
-      @compare="openCompare" @reserve="emit('reserve', $event)" @contract="emit('contract', $event)" @open="emit('open', $event)"
+      :comparing="compareTray" :lead-id="leadId"
+      @compare="toggleCompare" @expand="openCompareFull"
+      @reserve="emit('reserve', $event)" @contract="emit('contract', $event)" @open="emit('open', $event)"
     />
 
     <UnitMiniCard
