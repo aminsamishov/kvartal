@@ -3,7 +3,13 @@ import type { LeadTask, LeadTaskKind } from '~/types/models'
 import { LEAD_TASK_KINDS, LEAD_TASK_KIND_META } from '~/utils/meta'
 
 // Форма задачи с датой И временем: менеджер планирует день по часам.
-const props = defineProps<{ leadId: string; task?: LeadTask | null; defaultKind?: LeadTaskKind }>()
+const props = defineProps<{
+  leadId: string
+  task?: LeadTask | null
+  defaultKind?: LeadTaskKind
+  /** предзаполненный срок: планнер ставит задачу на тот час, по которому кликнули */
+  due?: string
+}>()
 const emit = defineEmits<{ done: []; cancel: [] }>()
 
 const salesStore = useSalesStore()
@@ -30,7 +36,7 @@ const form = reactive({
 })
 
 watchEffect(() => {
-  const base = props.task ? new Date(props.task.dueAt) : defaultDue()
+  const base = props.task ? new Date(props.task.dueAt) : props.due ? new Date(props.due) : defaultDue()
   form.kind = props.task?.kind ?? props.defaultKind ?? 'call'
   form.title = props.task?.title ?? ''
   form.date = base.toISOString().slice(0, 10)

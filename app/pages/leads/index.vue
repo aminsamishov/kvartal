@@ -97,14 +97,11 @@ const metrics = computed<MetricItem[]>(() => [
 /* ------------------------------ перенос этапа ----------------------------- */
 
 const lostFor = ref<string | null>(null)
-const lostReason = ref('')
-const LOST_REASONS = ['Не подошла цена', 'Купил в другом ЖК', 'Не одобрили ипотеку', 'Взял паузу', 'Не отвечает', 'Не устроили сроки']
 
 function onDrop({ leadId, stage }: { leadId: string; stage: LeadStage }) {
   if (stage === 'lost') {
     // отказ без причины не принимаем — иначе аналитика по причинам пустая
     lostFor.value = leadId
-    lostReason.value = ''
     return
   }
   const res = salesStore.moveLead(leadId, stage, author.value)
@@ -113,15 +110,6 @@ function onDrop({ leadId, stage }: { leadId: string; stage: LeadStage }) {
     misc.log('Заявки', `${name}: ${LEAD_STAGE_META[res.from].label} → ${LEAD_STAGE_META[res.to].label}`, author.value)
     ui.toast(`${name} → ${LEAD_STAGE_META[stage].label}`, 'ok')
   }
-}
-
-function confirmLost() {
-  if (!lostFor.value) return
-  salesStore.moveLead(lostFor.value, 'lost', author.value, { lostReason: lostReason.value })
-  misc.log('Заявки', `Отказ: ${lostReason.value || 'без причины'}`, author.value)
-  ui.toast('Заявка переведена в «Отказ»', 'info')
-  lostFor.value = null
-  lostReason.value = ''
 }
 
 /* ------------------------------- новая заявка ----------------------------- */
@@ -161,7 +149,13 @@ async function submitCreate() {
   activeLeadId.value = lead.id
 }
 
-const activeLeadId = ref<string | null>(null)
+/**
+ * Заявку можно открыть ссылкой: /leads?lead=… приходит из повестки, писем и
+ * уведомлений. Без этого ссылка приводила на доску, и заявку искали руками.
+ */
+const route = useRoute()
+const activeLeadId = ref<string | null>((route.query.lead as string) || null)
+watch(() => route.query.lead, (v) => { if (v) activeLeadId.value = v as string })
 </script>
 
 <template>
@@ -229,27 +223,11 @@ const activeLeadId = ref<string | null>(null)
     <LeadDrawer
       :lead-id="activeLeadId"
       @close="activeLeadId = null"
-      @request-lost="lostFor = $event; lostReason = ''"
+      @request-lost="lostFor = $event"
       @navigate="activeLeadId = $event"
     />
 
-    <!-- причина отказа -->
-    <AppModal :model-value="!!lostFor" title="Причина отказа" width="sm" @update:model-value="lostFor = null">
-      <p class="text-[12.5px] text-muted">Причина попадает в аналитику — по ней видно, что именно теряет продажи.</p>
-      <div class="mt-3 flex flex-wrap gap-1.5">
-        <button
-          v-for="r in LOST_REASONS" :key="r" type="button"
-          class="focus-ring rounded-full border px-2.5 py-1.5 text-[12px] font-medium transition-colors"
-          :class="lostReason === r ? 'border-bad bg-bad-bg text-bad' : 'border-line text-muted hover:bg-soft hover:text-ink'"
-          @click="lostReason = r"
-        >{{ r }}</button>
-      </div>
-      <AppInput v-model="lostReason" class="mt-3" label="Или своя формулировка" placeholder="Например, переехал в другой город" />
-      <div class="mt-4 flex gap-2">
-        <AppButton block @click="lostFor = null">Отмена</AppButton>
-        <AppButton block variant="danger" icon="ph:prohibit" @click="confirmLost">В «Отказ»</AppButton>
-      </div>
-    </AppModal>
+    <LeadLostModal :lead-id="lostFor" @close="lostFor = null" />
 
     <!-- новая заявка -->
     <AppDrawer v-model="createOpen" title="Новая заявка" subtitle="Клиент создастся автоматически, если его ещё нет" width="min(520px, 100vw)">

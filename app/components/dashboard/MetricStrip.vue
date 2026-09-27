@@ -19,6 +19,13 @@ export interface MetricItem {
   /** доля 0..100 — тонкий индикатор вместо спарклайна там, где истории нет */
   meter?: { pct: number; caption?: string }
   tone?: 'accent' | 'ok' | 'bad' | 'muted'
+  /**
+   * Цвет самого значения. Нужен там, где цифра сама по себе плохая новость:
+   * просрочка и горящие брони должны читаться как тревога, а не как ещё одно
+   * число в ряду. Для нейтральных показателей не задаём — цвет без смысла
+   * превращает полосу в светофор, где не видно главного.
+   */
+  valueTone?: 'ok' | 'warn' | 'bad'
   hero?: boolean
   to?: string
 }
@@ -55,8 +62,11 @@ const gridClass = computed(() => {
       <!-- пропорциональные цифры: tabular-nums на крупном значении делает
            число разреженным, он нужен только в столбцах таблиц -->
       <p
-        class="mt-1.5 flex items-baseline gap-1.5 font-semibold text-ink"
-        :class="m.hero ? 'text-[48px] leading-[1.03] tracking-[-0.035em]' : 'text-[25px] leading-[1.1] tracking-[-0.025em]'"
+        class="mt-1.5 flex items-baseline gap-1.5 font-semibold"
+        :class="[
+          m.hero ? 'text-[48px] leading-[1.03] tracking-[-0.035em]' : 'text-[25px] leading-[1.1] tracking-[-0.025em]',
+          m.valueTone === 'ok' ? 'text-ok' : m.valueTone === 'warn' ? 'text-warn' : m.valueTone === 'bad' ? 'text-bad' : 'text-ink',
+        ]"
       >
         {{ m.value }}
         <span v-if="m.unit" class="text-[13px] font-medium tracking-normal text-muted">{{ m.unit }}</span>

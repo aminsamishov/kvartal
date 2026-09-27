@@ -45,18 +45,17 @@ onMounted(async () => {
       <AppTopbar />
       <main class="flex-1 px-4 py-5 lg:px-7 lg:py-6">
         <!--
-          Без mode="out-in": он ждёт конца ухода скелетона, а переходы Vue
-          продвигаются через requestAnimationFrame. В фоновой вкладке rAF
-          заморожен, уход не завершается — и страница залипала на скелетоне,
-          пока вкладку не откроют. Теперь содержимое появляется сразу.
+          Не <Transition>: переходы Vue продвигаются через requestAnimationFrame,
+          а в фоновой вкладке он заморожен. Уход скелетона тогда не завершается —
+          раньше страница залипала на нём, а после отказа от mode="out-in" он
+          оставался в разметке рядом с содержимым и растягивал её по ширине.
+          Появление делаем CSS-анимацией: у неё нет фазы ухода и она не зависит
+          от rAF, поэтому смена работает в любой вкладке.
         -->
-        <Transition
-          enter-active-class="transition-opacity duration-200" leave-active-class="transition-opacity duration-100"
-          enter-from-class="opacity-0" leave-to-class="opacity-0"
-        >
-          <PageSkeleton v-if="!ready" :key="`sk-${skeletonKind}`" :kind="skeletonKind" />
-          <slot v-else />
-        </Transition>
+        <PageSkeleton v-if="!ready" :key="`sk-${skeletonKind}`" :kind="skeletonKind" />
+        <div v-else class="animate-fade-in">
+          <slot />
+        </div>
       </main>
     </div>
     <ToastHost />

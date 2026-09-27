@@ -1,16 +1,20 @@
 <script setup lang="ts">
 import type { AgendaItem, AgendaKind } from '~/utils/agenda'
 import { addDays, startOfDay } from '~/utils/agenda'
-import type { DayKpi } from '~/components/dashboard/DayKpis.vue'
-import { fmtDateFull, money, moneyCompact } from '~/utils/format'
+import { nextWorkSlot } from '~/utils/planner'
+import type { MetricItem } from '~/components/dashboard/MetricStrip.vue'
+import { fmtDateFull, money, moneyCompact, pluralRu } from '~/utils/format'
 
 definePageMeta({ breadcrumb: [{ label: 'Дашборд' }] })
 
 /**
- * Операционный центр. Дашборд отвечает на вопрос «что делать сегодня», а не
- * «как шли дела в мае»: сверху KPI дня, слева лента действий, справа то, что
- * горит. Графики компании живут ниже и только у того, кому видны её деньги —
- * менеджеру они не нужны и мешают увидеть свой день.
+ * Операционный центр. Дашборд отвечает на вопрос «что делать сейчас», а не
+ * «как шли дела в мае»: сверху показатели дня, под ними ближайшее дело и лента
+ * с осью времени, справа то, что горит. Графики компании живут ниже и только у
+ * того, кому видны её деньги — менеджеру они мешают увидеть свой день.
+ *
+ * Клик по делу открывает то, о чём дело: карточку заявки, договор, помещение.
+ * Раньше любая строка вела на список заявок, и нужную искали там руками.
  */
 const { can, workspace, seesEveryone, myId } = useAccess()
 const salesStore = useSalesStore()
@@ -25,21 +29,31 @@ const from = computed(() => startOfDay(now))
 const to = computed(() => addDays(from.value, 1))
 const { items: today } = useAgenda(from, to)
 
+// неделя вперёд — для полосы ближайших дней внизу
+const weekTo = computed(() => addDays(from.value, 7))
+const { items: week } = useAgenda(from, weekTo)
+
 /* ------------------------------ лента и фильтр ---------------------------- */
 
 const filter = ref<'all' | AgendaKind>('all')
-const FILTERS: { value: 'all' | AgendaKind; label: string }[] = [
-  { value: 'all', label: 'Всё' },
-  { value: 'visit', label: 'Показы' },
-  { value: 'call', label: 'Звонки' },
-  { value: 'payment', label: 'Платежи' },
-  { value: 'contract', label: 'Договоры' },
+const FILTERS: { value: 'all' | AgendaKind; label: string; icon: string }[] = [
+  { value: 'all', label: 'Всё', icon: 'ph:list-bullets' },
+  { value: 'visit', label: 'Показы', icon: 'ph:buildings' },
+  { value: 'call', label: 'Звонки', icon: 'ph:phone' },
+  { value: 'meeting', label: 'Встречи', icon: 'ph:users-three' },
+  { value: 'payment', label: 'Платежи', icon: 'ph:hand-coins' },
 ]
 const feed = computed(() => (filter.value === 'all' ? today.value : today.value.filter((i) => i.kind === filter.value)))
+const kindCount = (k: AgendaKind) => today.value.filter((i) => i.kind === k).length
 
 const visitsToday = computed(() => today.value.filter((i) => i.kind === 'visit'))
 const paymentsToday = computed(() => today.value.filter((i) => i.kind === 'payment'))
 const doneToday = computed(() => today.value.filter((i) => i.done).length)
+
+/** Ближайшее незакрытое дело — то, ради чего дашборд открывают утром. */
+const nextItem = computed(() => today.value.find((i) => !i.done && new Date(i.at) >= now)
+  ?? today.value.find((i) => !i.done)
+  ?? null)
 
 /* -------------------------------- просрочки ------------------------------- */
 
@@ -90,23 +104,30 @@ const receiptsToday = computed(() => dealsStore.payments
   .filter((p) => p.status === 'confirmed' && new Date(p.date) >= from.value && new Date(p.date) < to.value)
   .reduce((s, p) => s + p.amount, 0))
 
-/* --------------------------------- KPI дня -------------------------------- */
+/* ------------------------------ показатели дня ---------------------------- */
 
-const kpis = computed<DayKpi[]>(() => {
+const kpis = computed<MetricItem[]>(() => {
   const openToday = today.value.filter((i) => !i.done).length
-  const base: DayKpi[] = [
-    { key: 'agenda', label: 'Дел на сегодня', value: String(openToday), hint: `${doneToday.value} закрыто`, tone: openToday ? undefined : 'ok' },
-    { key: 'visits', label: 'Показы сегодня', value: String(visitsToday.value.length), hint: visitsToday.value.length ? 'встречи на объекте' : 'нет' },
-    { key: 'overdue-task', label: 'Просроченные задачи', value: String(overdueTasks.value.length), tone: overdueTasks.value.length ? 'bad' : undefined, hint: 'ждут действия', to: '/leads' },
+  const pct = today.value.length ? Math.round((doneToday.value / today.value.length) * 100) : 100
+  const base: MetricItem[] = [
+    {
+      key: 'agenda', label: 'Дел на сегодня', value: String(openToday), unit: openToday ? 'открыто' : undefined,
+      hero: true, tone: 'ok', meter: { pct, caption: `${doneToday.value} из ${today.value.length} закрыто` },
+    },
+    { key: 'visits', label: 'Показы сегодня', value: String(visitsToday.value.length), hint: visitsToday.value.length ? 'встречи на объекте' : 'не запланированы' },
+    {
+      key: 'overdue-task', label: 'Просроченные задачи', value: String(overdueTasks.value.length),
+      valueTone: overdueTasks.value.length ? 'bad' : undefined, hint: 'ждут действия', to: '/leads',
+    },
   ]
 
   if (workspace.value === 'finance') {
     return [
-      ...base.slice(0, 1),
+      base[0]!,
       { key: 'pay-today', label: 'Платежи сегодня', value: money(paymentsToday.value.reduce((s, i) => s + (i.amount ?? 0), 0)), hint: `${paymentsToday.value.length} по графику`, to: '/payments' },
-      { key: 'received', label: 'Поступило сегодня', value: money(receiptsToday.value), tone: 'ok', to: '/payments' },
-      { key: 'pending', label: 'На подтверждении', value: String(dealsStore.pendingPayments.length), tone: dealsStore.pendingPayments.length ? 'warn' : undefined, to: '/payments' },
-      { key: 'overdue', label: 'Просрочка', value: moneyCompact(overdueAmount.value), tone: overdueAmount.value ? 'bad' : undefined, hint: `${overdueContracts.value.length} договоров`, to: '/contracts' },
+      { key: 'received', label: 'Поступило сегодня', value: money(receiptsToday.value), valueTone: 'ok', to: '/payments' },
+      { key: 'pending', label: 'На подтверждении', value: String(dealsStore.pendingPayments.length), valueTone: dealsStore.pendingPayments.length ? 'warn' : undefined, to: '/payments' },
+      { key: 'overdue', label: 'Просрочка', value: moneyCompact(overdueAmount.value), valueTone: overdueAmount.value ? 'bad' : undefined, hint: `${overdueContracts.value.length} договоров`, to: '/contracts' },
       { key: 'contracts', label: 'Договоров за месяц', value: String(monthContracts.value.length), to: '/contracts' },
     ]
   }
@@ -115,7 +136,7 @@ const kpis = computed<DayKpi[]>(() => {
     const revenue = unitsStore.units.filter((u) => u.status === 'sold' || u.status === 'installment').reduce((s, u) => s + u.price, 0)
     return [
       ...base,
-      { key: 'overdue', label: 'Просрочка', value: moneyCompact(overdueAmount.value), tone: overdueAmount.value ? 'bad' : undefined, hint: `${overdueContracts.value.length} договоров`, to: '/contracts' },
+      { key: 'overdue', label: 'Просрочка', value: moneyCompact(overdueAmount.value), valueTone: overdueAmount.value ? 'bad' : undefined, hint: `${overdueContracts.value.length} договоров`, to: '/contracts' },
       { key: 'leads', label: 'Заявки в работе', value: String(myLeads.value.length), to: '/leads' },
       { key: 'revenue', label: 'Выручка в работе', value: moneyCompact(revenue), hint: `${monthContracts.value.length} сделок за месяц` },
     ]
@@ -124,9 +145,15 @@ const kpis = computed<DayKpi[]>(() => {
   // менеджер: его день, его заявки, его деньги
   return [
     ...base,
-    { key: 'res', label: 'Брони на исходе', value: String(expiringReservations.value.length), tone: expiringReservations.value.length ? 'warn' : undefined, hint: 'ближайшие 3 дня', to: '/board' },
+    {
+      key: 'res', label: 'Брони на исходе', value: String(expiringReservations.value.length),
+      valueTone: expiringReservations.value.length ? 'warn' : undefined, hint: 'ближайшие 3 дня', to: '/board',
+    },
     { key: 'leads', label: 'Мои заявки', value: String(myLeads.value.length), hint: 'в работе', to: '/leads' },
-    { key: 'deals', label: 'Мои сделки за месяц', value: String(monthContracts.value.length), hint: monthContracts.value.length ? moneyCompact(monthContracts.value.reduce((s, c) => s + c.price, 0)) : 'пока нет', to: '/contracts' },
+    {
+      key: 'deals', label: 'Мои сделки за месяц', value: String(monthContracts.value.length),
+      hint: monthContracts.value.length ? moneyCompact(monthContracts.value.reduce((s, c) => s + c.price, 0)) : 'пока нет', to: '/contracts',
+    },
   ]
 })
 
@@ -141,13 +168,24 @@ const attention = computed(() => [
 
 /* --------------------------------- действия -------------------------------- */
 
+const { leadId, unitId, open: openItem, close: closeItem } = useAgendaOpen()
+const lostFor = ref<string | null>(null)
+
 function completeTask(item: AgendaItem) {
   if (!item.leadId || !item.taskId) return
   salesStore.completeLeadTask(item.leadId, item.taskId, '', auth.user?.name ?? 'Менеджер')
   ui.toast('Задача закрыта', 'ok')
 }
-function openItem(item: AgendaItem) {
-  if (item.to) navigateTo(item.to)
+
+const planOpen = ref(false)
+const planFor = ref<string | undefined>()
+function planNow() {
+  planFor.value = nextWorkSlot().toISOString()
+  planOpen.value = true
+}
+
+function openDay(date: Date) {
+  navigateTo(`/calendar?date=${date.toISOString().slice(0, 10)}`)
 }
 
 const greeting = computed(() => {
@@ -159,7 +197,7 @@ const greeting = computed(() => {
 
 <template>
   <div class="flex flex-col gap-4">
-    <PageHeader :title="greeting" :subtitle="`${fmtDateFull(now.toISOString())} · ${today.length} событий в плане`">
+    <PageHeader :title="greeting" :subtitle="`${fmtDateFull(now.toISOString())} · ${today.length} ${pluralRu(today.length, 'событие', 'события', 'событий')} в плане`">
       <template #actions>
         <AppButton v-if="can('calendar.view')" icon="ph:calendar-dots" @click="navigateTo('/calendar')">Календарь</AppButton>
         <AppButton v-if="can('board.view')" icon="ph:grid-nine" @click="navigateTo('/board')">Шахматка</AppButton>
@@ -167,34 +205,50 @@ const greeting = computed(() => {
       </template>
     </PageHeader>
 
-    <DayKpis :items="kpis" />
+    <MetricStrip :items="kpis" />
 
     <div class="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
-      <!-- лента дня -->
-      <AppCard :padded="false">
-        <div class="flex flex-wrap items-center justify-between gap-2 px-4 pt-4">
-          <div>
-            <h3 class="text-[14px] font-semibold text-ink">План на сегодня</h3>
-            <p class="text-[12px] text-muted">
-              {{ seesEveryone ? 'Отдел продаж' : 'Ваши дела' }} · закрыто {{ doneToday }} из {{ today.length }}
-            </p>
-          </div>
-          <SegmentedControl
-            :model-value="filter" :options="FILTERS"
-            @update:model-value="filter = $event as 'all' | AgendaKind"
-          />
-        </div>
-        <div class="px-4 pb-4 pt-2">
-          <AgendaList
-            :items="feed"
-            empty-title="На сегодня дел нет"
-            empty-text="Поставьте задачу в карточке заявки — она появится здесь"
-            @done="completeTask" @open="openItem"
-          />
-        </div>
-      </AppCard>
+      <div class="flex min-w-0 flex-col gap-4">
+        <NextAction
+          :item="nextItem" :done-count="doneToday" :total="today.length"
+          @open="openItem" @complete="completeTask" @plan="planNow"
+        />
 
-      <div class="flex flex-col gap-4">
+        <!-- лента дня -->
+        <AppCard :padded="false">
+          <div class="flex flex-wrap items-center justify-between gap-2 border-b border-line px-4 py-3">
+            <div>
+              <h3 class="text-[14px] font-semibold tracking-[-0.01em] text-ink">План на сегодня</h3>
+              <p class="text-[12px] text-muted">
+                {{ seesEveryone ? 'Отдел продаж' : 'Ваши дела' }} · клик открывает карточку
+              </p>
+            </div>
+            <div class="flex flex-wrap gap-1.5">
+              <button
+                v-for="f in FILTERS" :key="f.value" type="button"
+                class="focus-ring inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[12px] font-medium transition-colors"
+                :class="filter === f.value ? 'border-ink bg-ink text-panel' : 'border-line bg-panel text-muted hover:text-ink'"
+                @click="filter = f.value"
+              >
+                <Icon :name="f.icon" size="12" />{{ f.label }}
+                <span v-if="f.value !== 'all' && kindCount(f.value as AgendaKind)" class="tabular opacity-70">
+                  {{ kindCount(f.value as AgendaKind) }}
+                </span>
+              </button>
+            </div>
+          </div>
+          <div class="px-4 py-3">
+            <AgendaTimeline
+              :items="feed"
+              empty-title="На сегодня дел нет"
+              empty-text="Поставьте задачу в карточке заявки — она появится здесь"
+              @done="completeTask" @open="openItem"
+            />
+          </div>
+        </AppCard>
+      </div>
+
+      <div class="flex min-w-0 flex-col gap-4">
         <!-- требует внимания -->
         <AppCard v-if="attention.length" title="Требует внимания" subtitle="Система ждёт решения">
           <div class="-mx-1.5 flex flex-col">
@@ -216,7 +270,7 @@ const greeting = computed(() => {
         <!-- просрочки -->
         <AppCard
           title="Просрочки"
-          :subtitle="overdueAmount || overdueTasks.length ? `${moneyCompact(overdueAmount)} по графику · ${overdueTasks.length} задач` : 'Всё в сроке'"
+          :subtitle="overdueAmount || overdueTasks.length ? `${moneyCompact(overdueAmount)} по графику · ${overdueTasks.length} ${pluralRu(overdueTasks.length, 'задача', 'задачи', 'задач')}` : 'Всё в сроке'"
         >
           <div v-if="overdueContracts.length" class="mb-2 flex flex-col gap-1">
             <NuxtLink
@@ -249,7 +303,7 @@ const greeting = computed(() => {
         </AppCard>
 
         <!-- показы сегодня -->
-        <AppCard title="Показы сегодня" :subtitle="visitsToday.length ? `${visitsToday.length} встреч на объекте` : 'Показов не запланировано'">
+        <AppCard title="Показы сегодня" :subtitle="visitsToday.length ? `${visitsToday.length} ${pluralRu(visitsToday.length, 'встреча', 'встречи', 'встреч')} на объекте` : 'Показов не запланировано'">
           <AgendaList
             :items="visitsToday" empty-icon="ph:buildings" empty-title="Показов сегодня нет"
             empty-text="Запланируйте показ в карточке заявки"
@@ -259,10 +313,21 @@ const greeting = computed(() => {
       </div>
     </div>
 
+    <!-- ближайшая неделя -->
+    <template v-if="can('calendar.view')">
+      <SectionHeader title="Ближайшая неделя" subtitle="Плотность дней — куда ещё влезет показ" />
+      <WeekAhead :items="week" :from="from" @pick="openDay" />
+    </template>
+
     <!-- аналитика компании: только тем, кому видны её деньги -->
     <template v-if="can('dashboard.company')">
       <SectionHeader title="Аналитика компании" subtitle="Деньги, воронка и фонд за 12 месяцев" />
       <CompanyAnalytics />
     </template>
+
+    <LeadDrawer :lead-id="leadId" @close="closeItem" @request-lost="lostFor = $event" @navigate="leadId = $event" />
+    <UnitDrawer :unit-id="unitId" @close="closeItem" @navigate="unitId = $event" />
+    <LeadLostModal :lead-id="lostFor" @close="lostFor = null" />
+    <AgendaPlanDrawer v-model="planOpen" :due="planFor" />
   </div>
 </template>

@@ -25,6 +25,12 @@ export interface AgendaItem {
   amount?: number
   done?: boolean
   overdue?: boolean
+  /**
+   * Дело без часа: платёж по графику, дата подписания, срок брони. Время у них
+   * формальное, и в сетке дня они встали бы стопкой в случайный час — поэтому
+   * планнер выносит их в полосу «весь день» над сеткой.
+   */
+  allDay?: boolean
   to?: string
   /** ссылки на сущности: по ним открываются быстрые действия */
   leadId?: string
@@ -43,6 +49,16 @@ export const AGENDA_KIND_META: Record<AgendaKind, { label: string; icon: string;
   payment: { label: 'Платежи', icon: 'ph:hand-coins', color: 'var(--mod-finance)' },
   contract: { label: 'Договоры', icon: 'ph:file-text', color: 'var(--mod-docs)' },
   reservation: { label: 'Брони', icon: 'ph:bookmark-simple', color: 'var(--mod-reserve)' },
+}
+
+/**
+ * Сколько дело занимает в сетке дня, минут. У задачи нет поля длительности, но
+ * блок нулевой высоты в планнере не читается — берём типичную длительность
+ * по виду дела: звонок короткий, показ на объекте долгий.
+ */
+export const AGENDA_KIND_DURATION: Record<AgendaKind, number> = {
+  call: 20, meeting: 60, visit: 45, document: 30,
+  task: 30, payment: 30, contract: 60, reservation: 30,
 }
 
 export interface AgendaSource {
@@ -137,6 +153,7 @@ export function buildAgenda(src: AgendaSource, from: Date, to: Date, now = new D
       amount: remaining,
       done: remaining <= 0,
       overdue,
+      allDay: true,
       to: `/contracts/${contract.id}`,
       contractId: contract.id,
     })
@@ -155,6 +172,7 @@ export function buildAgenda(src: AgendaSource, from: Date, to: Date, now = new D
       assignedTo: src.ownerOfContract(contract),
       amount: contract.price,
       done: true,
+      allDay: true,
       to: `/contracts/${contract.id}`,
       contractId: contract.id,
     })
@@ -173,6 +191,7 @@ export function buildAgenda(src: AgendaSource, from: Date, to: Date, now = new D
       tone: new Date(r.expiresAt) < now ? 'bad' : 'warn',
       assignedTo: r.createdBy,
       overdue: new Date(r.expiresAt) < now,
+      allDay: true,
       to: unit ? `/board?building=${unit.buildingId}` : '/board',
       leadId: r.leadId,
       unitId: r.unitId,

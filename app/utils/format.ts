@@ -30,6 +30,16 @@ export function fmtDateFull(iso: string) {
   return `${d.getDate()} ${MONTHS_FULL[d.getMonth()]} ${d.getFullYear()}`
 }
 
+/**
+ * Месяц и год для заголовков календаря. Именительный падеж, без «г.»:
+ * toLocaleDateString отдаёт «сентябрь 2026 г.», и хвост в шапке планнера лишний.
+ */
+const MONTHS_NOM = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь']
+
+export function fmtMonthYear(d: Date) {
+  return `${MONTHS_NOM[d.getMonth()]} ${d.getFullYear()}`
+}
+
 export function fmtDateTime(iso: string) {
   const d = new Date(iso)
   const hh = String(d.getHours()).padStart(2, '0')
