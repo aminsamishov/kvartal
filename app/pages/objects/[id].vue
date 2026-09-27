@@ -9,6 +9,10 @@ const route = useRoute()
 const unitsStore = useUnitsStore()
 const dealsStore = useDealsStore()
 const settingsStore = useSettingsStore()
+const { can } = useAccess()
+
+/** Каталог проекта правит ответственный за объекты; продавец смотрит. */
+const canEdit = computed(() => can('objects.edit'))
 
 const project = computed(() => unitsStore.project(route.params.id as string))
 const buildingsAll = computed(() => (project.value ? unitsStore.buildingsByProject(project.value.id) : []))
@@ -85,7 +89,7 @@ const infoRows = computed(() => {
 
       <AppCard title="Паспорт проекта" subtitle="Поля уходят на витрину и в договор">
         <template #actions>
-          <button class="text-[12.5px] font-semibold text-plum hover:underline" @click="showEditProject = true">Изменить</button>
+          <button v-if="canEdit" class="text-[12.5px] font-semibold text-plum hover:underline" @click="showEditProject = true">Изменить</button>
         </template>
         <dl class="flex flex-col">
           <div v-for="[label, value] in infoRows" :key="label" class="flex items-baseline justify-between gap-4 border-b border-line py-[7px] last:border-0">
@@ -97,7 +101,7 @@ const infoRows = computed(() => {
 
       <AppCard title="Генпланы" subtitle="Схема расположения домов на участке">
         <MediaGallery
-          :items="project.masterPlans" accept="image/*" add-label="Загрузить генплан" empty-hint="Генпланы не загружены"
+          :items="project.masterPlans" accept="image/*" add-label="Загрузить генплан" empty-hint="Генпланы не загружены" :readonly="!canEdit"
           @add="(f) => unitsStore.addMasterPlan(project!.id, f)" @remove="(id) => unitsStore.removeMasterPlan(project!.id, id)"
         />
       </AppCard>
@@ -107,7 +111,7 @@ const infoRows = computed(() => {
       <SectionHeader title="Дома" :subtitle="`${buildingsAll.filter((b) => !b.archived).length} в продаже, ${buildingsAll.filter((b) => b.archived).length} в архиве`">
         <template #actions>
           <SegmentedControl v-model="buildingTab" :options="[{ value: 'active', label: 'Активные' }, { value: 'archive', label: 'Архив' }]" />
-          <AppButton variant="primary" size="sm" icon="ph:plus-bold" @click="showCreateBuilding = true">Добавить дом</AppButton>
+          <AppButton v-if="canEdit" variant="primary" size="sm" icon="ph:plus-bold" @click="showCreateBuilding = true">Добавить дом</AppButton>
         </template>
       </SectionHeader>
       <div class="grid grid-cols-1 gap-3.5 xl:grid-cols-2">
@@ -118,19 +122,21 @@ const infoRows = computed(() => {
         :title="buildingTab === 'archive' ? 'В архиве пусто' : 'В проекте пока нет домов'"
         :text="buildingTab === 'archive' ? undefined : 'Добавьте первый дом, чтобы начать наполнять шахматку'"
       >
-        <template v-if="buildingTab === 'active'" #action><AppButton size="sm" variant="primary" @click="showCreateBuilding = true">Добавить дом</AppButton></template>
+        <template v-if="buildingTab === 'active' && canEdit" #action><AppButton size="sm" variant="primary" @click="showCreateBuilding = true">Добавить дом</AppButton></template>
       </EmptyState>
     </section>
 
     <AppCard title="Медиаматериалы" subtitle="Фото и видео объекта — используются на витрине и в презентациях">
       <MediaGallery
-        :items="project.media" allow-video add-label="Загрузить" empty-hint="Видео- и фото-материалы не загружены"
+        :items="project.media" allow-video add-label="Загрузить" empty-hint="Видео- и фото-материалы не загружены" :readonly="!canEdit"
         @add="(f) => unitsStore.addMedia(project!.id, f)" @remove="(id) => unitsStore.removeMedia(project!.id, id)"
       />
     </AppCard>
 
-    <ProjectEditPanel v-model="showEditProject" :project="project" />
-    <BuildingEditPanel v-model="showCreateBuilding" :project-id="project.id" :building="null" />
+    <template v-if="canEdit">
+      <ProjectEditPanel v-model="showEditProject" :project="project" />
+      <BuildingEditPanel v-model="showCreateBuilding" :project-id="project.id" :building="null" />
+    </template>
   </div>
   <EmptyState v-else icon="ph:question" title="Проект не найден" class="mt-10" />
 </template>

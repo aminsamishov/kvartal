@@ -10,6 +10,10 @@ import { fmtDate, money, moneyCompact } from '~/utils/format'
 const props = defineProps<{ building: Building; project?: Project; fillPercent: number }>()
 const emit = defineEmits<{ edit: []; archive: [] }>()
 
+const { can } = useAccess()
+/** «Фасад» и «Шахматка» — инструменты показа, они остаются у всех. */
+const canEdit = computed(() => can('objects.edit'))
+
 const unitsStore = useUnitsStore()
 
 const stats = computed(() => unitsStore.buildingStats(props.building.id))
@@ -76,11 +80,13 @@ const kpis = computed(() => {
           @click="navigateTo(`/board?building=${building.id}&view=facade`)"
         >Фасад</AppButton>
         <AppButton variant="primary" icon="ph:grid-nine" @click="navigateTo(`/board?building=${building.id}`)">Шахматка</AppButton>
-        <AppButton icon="ph:pencil-simple" variant="ghost" title="Редактировать дом" @click="emit('edit')" />
-        <AppButton
-          :icon="building.archived ? 'ph:archive-tray' : 'ph:archive'" variant="ghost"
-          :title="building.archived ? 'Вернуть из архива' : 'В архив'" @click="emit('archive')"
-        />
+        <template v-if="canEdit">
+          <AppButton icon="ph:pencil-simple" variant="ghost" title="Редактировать дом" @click="emit('edit')" />
+          <AppButton
+            :icon="building.archived ? 'ph:archive-tray' : 'ph:archive'" variant="ghost"
+            :title="building.archived ? 'Вернуть из архива' : 'В архив'" @click="emit('archive')"
+          />
+        </template>
       </div>
     </div>
 

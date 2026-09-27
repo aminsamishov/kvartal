@@ -9,6 +9,12 @@ definePageMeta({ breadcrumb: [{ label: 'Мои объекты' }, { label: 'Пр
 
 const unitsStore = useUnitsStore()
 const ui = useUiStore()
+const { can } = useAccess()
+
+/** Каталог правит тот, кто за него отвечает; продавец только смотрит. */
+const canEdit = computed(() => can('objects.edit'))
+/** Выручка проекта — деньги компании, а не инструмент продавца. */
+const seesMoney = computed(() => can('dashboard.company'))
 
 const tab = ref<'active' | 'archive'>('active')
 const view = ref<'table' | 'cards'>('table')
@@ -35,11 +41,18 @@ const totals = computed<MetricItem[]>(() => {
   const revenue = active.reduce((s, p) => s + unitsStore.projectStats(p.id).revenue, 0)
   const free = units.filter((u) => u.status === 'free').length
   const soldish = units.filter((u) => u.status === 'sold' || u.status === 'installment').length
+  const realised = units.length ? Math.round((soldish / units.length) * 100) : 0
   return [
-    {
-      key: 'revenue', label: 'Выручка в работе', hero: true, value: moneyCompact(revenue), unit: 'USD',
-      hint: `${units.length ? Math.round((soldish / units.length) * 100) : 0}% фонда реализовано`,
-    },
+    // продавцу вместо выручки компании — размер фонда, с которым он работает
+    seesMoney.value
+      ? {
+          key: 'revenue', label: 'Выручка в работе', hero: true, value: moneyCompact(revenue), unit: 'USD',
+          hint: `${realised}% фонда реализовано`,
+        }
+      : {
+          key: 'free-hero', label: 'Свободно в продаже', hero: true, value: String(free), unit: 'помещений',
+          hint: `${realised}% фонда уже в сделках`,
+        },
     { key: 'projects', label: 'Проектов в продаже', value: String(active.length), hint: `${unitsStore.buildings.filter((b) => !b.archived).length} домов в продаже` },
     {
       key: 'units', label: 'Помещений в фонде', value: String(units.length),
@@ -106,7 +119,7 @@ function segments(projectId: string) {
     >
       <template #actions>
         <AppButton icon="ph:grid-nine" @click="navigateTo('/board')">Шахматка</AppButton>
-        <AppButton variant="primary" icon="ph:plus-bold" @click="openCreate">Новый проект</AppButton>
+        <AppButton v-if="canEdit" variant="primary" icon="ph:plus-bold" @click="openCreate">Новый проект</AppButton>
       </template>
     </PageHeader>
 
@@ -140,8 +153,8 @@ function segments(projectId: string) {
               <th class="text-right">Цена м²</th>
               <th class="w-[132px]">Реализация</th>
               <th class="w-[112px]">Готовность</th>
-              <th class="text-right">Выручка</th>
-              <th class="w-9" />
+              <th v-if="seesMoney" class="text-right">Выручка</th>
+              <th v-if="canEdit" class="w-9" />
             </tr>
           </thead>
           <tbody>
@@ -186,8 +199,8 @@ function segments(projectId: string) {
               <td>
                 <StatusTag size="sm" :tone="r.readiness >= 80 ? 'ok' : r.readiness >= 40 ? 'warn' : 'neutral'">{{ r.readiness }}%</StatusTag>
               </td>
-              <td class="tabular text-right font-semibold">{{ moneyCompact(r.stats.revenue, r.project.currency) }}</td>
-              <td>
+              <td v-if="seesMoney" class="tabular text-right font-semibold">{{ moneyCompact(r.stats.revenue, r.project.currency) }}</td>
+              <td v-if="canEdit">
                 <button
                   type="button" class="focus-ring grid h-7 w-7 place-items-center rounded-lg text-muted hover:bg-soft hover:text-ink"
                   :title="r.project.archived ? 'Вернуть из архива' : 'В архив'" @click="toggleArchive(r.project.id, $event)"
@@ -231,8 +244,10 @@ function segments(projectId: string) {
             <p class="truncate text-[12px] text-muted">{{ r.project.address }} · {{ r.project.stage }}</p>
           </div>
           <div class="shrink-0 text-right">
-            <p class="text-[10.5px] uppercase tracking-[0.04em] text-muted">Выручка</p>
-            <p class="text-[17px] font-semibold tracking-[-0.02em] text-ink">{{ moneyCompact(r.stats.revenue, r.project.currency) }}</p>
+            <p class="text-[10.5px] uppercase tracking-[0.04em] text-muted">{{ seesMoney ? 'Выручка' : 'Свободно' }}</p>
+            <p class="text-[17px] font-semibold tracking-[-0.02em] text-ink">
+              {{ seesMoney ? moneyCompact(r.stats.revenue, r.project.currency) : r.stats.free }}
+            </p>
           </div>
         </div>
 
@@ -255,9 +270,9 @@ function segments(projectId: string) {
     </div>
 
     <EmptyState v-else icon="ph:buildings" :title="tab === 'archive' ? 'В архиве пусто' : 'Проектов пока нет'">
-      <template v-if="tab === 'active'" #action><AppButton size="sm" variant="primary" icon="ph:plus-bold" @click="openCreate">Новый проект</AppButton></template>
+      <template v-if="tab === 'active' && canEdit" #action><AppButton size="sm" variant="primary" icon="ph:plus-bold" @click="openCreate">Новый проект</AppButton></template>
     </EmptyState>
 
-    <ProjectEditPanel v-model="showEdit" :project="editingProject" />
+    <ProjectEditPanel v-if="canEdit" v-model="showEdit" :project="editingProject" />
   </div>
 </template>

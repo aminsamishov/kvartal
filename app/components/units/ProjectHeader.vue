@@ -19,6 +19,10 @@ const props = defineProps<{
 const emit = defineEmits<{ edit: []; 'add-building': [] }>()
 
 const unitsStore = useUnitsStore()
+const { can } = useAccess()
+const canEdit = computed(() => can('objects.edit'))
+/** Выручка проекта — деньги компании; продавцу показываем размер фонда. */
+const seesMoney = computed(() => can('dashboard.company'))
 
 const stats = computed(() => unitsStore.projectStats(props.project.id))
 const units = computed(() => unitsStore.unitsByProject(props.project.id))
@@ -38,7 +42,9 @@ const kpis = computed(() => {
   const s = stats.value
   const total = s.total || 1
   return [
-    { label: 'Выручка в работе', value: moneyCompact(s.revenue, props.project.currency), tone: 'ink', spark: true },
+    seesMoney.value
+      ? { label: 'Выручка в работе', value: moneyCompact(s.revenue, props.project.currency), tone: 'ink' as const, spark: true }
+      : { label: 'Помещений в фонде', value: String(s.total), hint: `${buildings.value.length} домов`, tone: 'ink' as const, spark: true },
     { label: 'Реализовано', value: `${s.soldPct}%`, hint: `${s.sold + s.installment} из ${s.total}` },
     { label: 'Свободно', value: String(s.free), hint: `${Math.round((s.free / total) * 100)}% фонда`, tone: 'ok' },
     { label: 'В брони', value: String(s.reserved), hint: 'ждут решения', tone: 'warn' },
@@ -84,9 +90,9 @@ const kpis = computed(() => {
       <div class="flex shrink-0 flex-wrap gap-2">
         <AppButton icon="ph:map-trifold" @click="navigateTo(`/board?project=${project.id}&view=master`)">Генплан</AppButton>
         <AppButton variant="primary" icon="ph:grid-nine" @click="navigateTo(`/board?project=${project.id}`)">Шахматка</AppButton>
-        <AppButton icon="ph:plus-bold" @click="emit('add-building')">Новый дом</AppButton>
+        <AppButton v-if="canEdit" icon="ph:plus-bold" @click="emit('add-building')">Новый дом</AppButton>
         <AppButton icon="ph:tag" variant="ghost" title="Прайс-лист проекта" @click="navigateTo('/pricing')" />
-        <AppButton icon="ph:pencil-simple" variant="ghost" title="Редактировать проект" @click="emit('edit')" />
+        <AppButton v-if="canEdit" icon="ph:pencil-simple" variant="ghost" title="Редактировать проект" @click="emit('edit')" />
       </div>
     </div>
 

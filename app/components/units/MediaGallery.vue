@@ -8,7 +8,9 @@ const props = withDefaults(defineProps<{
   allowVideo?: boolean
   emptyHint?: string
   addLabel?: string
-}>(), { accept: 'image/*', allowVideo: false, addLabel: 'Загрузить' })
+  /** режим просмотра: без загрузки и удаления — для ролей без прав на каталог */
+  readonly?: boolean
+}>(), { accept: 'image/*', allowVideo: false, addLabel: 'Загрузить', readonly: false })
 
 const emit = defineEmits<{ add: [{ url: string; name: string; kind: 'photo' | 'video' }]; remove: [string] }>()
 
@@ -31,6 +33,7 @@ async function upload() {
           <Icon name="ph:play-fill" size="12" />
         </span>
         <button
+          v-if="!readonly"
           type="button" class="focus-ring absolute right-1.5 top-1.5 grid h-7 w-7 place-items-center rounded-lg bg-ink/60 text-white opacity-0 transition-opacity group-hover:opacity-100"
           title="Удалить" @click="emit('remove', item.id)"
         >
@@ -38,6 +41,7 @@ async function upload() {
         </button>
       </div>
       <button
+        v-if="!readonly"
         type="button" class="focus-ring flex aspect-square flex-col items-center justify-center gap-1.5 rounded-xl2 border border-dashed border-line text-muted hover:border-plum hover:text-plum"
         @click="upload"
       >
@@ -46,7 +50,7 @@ async function upload() {
       </button>
     </div>
     <EmptyState v-else compact icon="ph:image" :title="emptyHint ?? 'Материалы не загружены'">
-      <template #action><AppButton size="sm" variant="primary" icon="ph:upload-simple" @click="upload">{{ addLabel }}</AppButton></template>
+      <template v-if="!readonly" #action><AppButton size="sm" variant="primary" icon="ph:upload-simple" @click="upload">{{ addLabel }}</AppButton></template>
     </EmptyState>
   </div>
 </template>

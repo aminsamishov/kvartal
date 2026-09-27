@@ -40,8 +40,17 @@ export const WORKSPACE_OF: Record<UserRole, Workspace> = {
   lawyer: 'legal',
 }
 
+/**
+ * Продавец ничего не правит в каталоге. Ни цену, ни планировку, ни статус
+ * помещения вручную: статус меняется сам — через бронь, договор и истечение
+ * срока. Руками выставленный статус ломает эту связь, потому что за ним не
+ * стоит ни брони, ни сделки, и объект оказывается занят без причины.
+ *
+ * Бронь и договор правом unit.editStatus не закрыты — это продажа, а не
+ * редактирование карточки.
+ */
 const SALES_BASE: Capability[] = [
-  'board.view', 'unit.editStatus', 'objects.view', 'leads.work', 'deals.create',
+  'board.view', 'objects.view', 'leads.work', 'deals.create',
   'approvals.view', 'clients.view', 'contracts.view', 'documents.view', 'calendar.view',
   // платежи менеджер видит, но не проводит: график своих клиентов — часть его работы
   'payments.view',

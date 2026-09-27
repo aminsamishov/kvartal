@@ -7,6 +7,14 @@ const router = useRouter()
 const unitsStore = useUnitsStore()
 const settingsStore = useSettingsStore()
 const ui = useUiStore()
+const { can } = useAccess()
+
+/**
+ * Разделы этой страницы — редакторы каталога: шахматка по этажам, планировки,
+ * планы и фасады. Продавцу они не нужны и не должны быть доступны: он смотрит
+ * тот же фонд через подбор, где всё уже только для чтения.
+ */
+const canEdit = computed(() => can('objects.edit'))
 
 const building = computed(() => unitsStore.building(route.params.buildingId as string))
 const project = computed(() => (building.value ? unitsStore.project(building.value.projectId) : undefined))
@@ -22,6 +30,20 @@ const TABS: BuildingTab[] = ['overview', 'board', 'presets', 'floorplans', 'faca
 // таб держим в адресе: со страницы разметки фасада возвращаемся туда же,
 // откуда ушли, и ссылкой на конкретный раздел можно поделиться
 const tab = ref<BuildingTab>(TABS.includes(route.query.tab as BuildingTab) ? (route.query.tab as BuildingTab) : 'overview')
+// без прав на каталог остаётся только обзор — иначе ссылкой ?tab=presets
+// можно было бы открыть редактор в обход скрытых вкладок
+watchEffect(() => { if (!canEdit.value && tab.value !== 'overview') tab.value = 'overview' })
+
+const visibleTabs = computed(() => {
+  const all = [
+    { value: 'overview', label: 'Обзор', icon: 'ph:info' },
+    { value: 'board', label: 'Шахматка', icon: 'ph:grid-nine', count: unitsCount.value || undefined },
+    { value: 'presets', label: 'Планировки помещений', icon: 'ph:floor-plan', count: building.value?.unitTypePresets.length || undefined },
+    { value: 'floorplans', label: 'Планировки этажей', icon: 'ph:stack', count: building.value?.floorPlans.filter((f) => f.imageUrl).length || undefined },
+    { value: 'facade', label: 'Фасады', icon: 'ph:buildings', count: building.value?.facades.length || undefined },
+  ]
+  return canEdit.value ? all : all.slice(0, 1)
+})
 watch(tab, (v) => router.replace({ query: { ...route.query, tab: v === 'overview' ? undefined : v } }))
 
 const boardMode = ref<'manual' | 'import'>('manual')
@@ -96,22 +118,14 @@ const infoRows = computed(() => {
       @edit="showEdit = true" @archive="toggleArchive"
     />
 
-    <BuildingSectionCards :building="building" @select="goSection" @import="goImport" />
+    <BuildingSectionCards v-if="canEdit" :building="building" @select="goSection" @import="goImport" />
 
-    <Tabs
-      :model-value="tab" :tabs="[
-        { value: 'overview', label: 'Обзор', icon: 'ph:info' },
-        { value: 'board', label: 'Шахматка', icon: 'ph:grid-nine', count: unitsCount || undefined },
-        { value: 'presets', label: 'Планировки помещений', icon: 'ph:floor-plan', count: building.unitTypePresets.length || undefined },
-        { value: 'floorplans', label: 'Планировки этажей', icon: 'ph:stack', count: building.floorPlans.filter((f) => f.imageUrl).length || undefined },
-        { value: 'facade', label: 'Фасады', icon: 'ph:buildings', count: building.facades.length || undefined },
-      ]" @update:model-value="goSection"
-    />
+    <Tabs v-if="visibleTabs.length > 1" :model-value="tab" :tabs="visibleTabs" @update:model-value="goSection" />
 
     <!-- обзор: данные дома + боковая колонка; редакторы разделов — на всю ширину -->
     <div v-if="tab === 'overview'" class="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_280px]">
       <AppCard title="Информация о доме" subtitle="Эти поля уходят на витрину, в PDF-презентацию и в договор">
-        <template #actions><AppButton size="sm" icon="ph:pencil-simple" @click="showEdit = true">Редактировать</AppButton></template>
+        <template v-if="canEdit" #actions><AppButton size="sm" icon="ph:pencil-simple" @click="showEdit = true">Редактировать</AppButton></template>
         <dl class="grid grid-cols-1 gap-x-7 sm:grid-cols-2">
           <div v-for="[label, value] in infoRows" :key="label" class="flex items-baseline justify-between gap-3 border-b border-line py-2">
             <dt class="text-[12px] text-muted">{{ label }}</dt>
@@ -128,22 +142,26 @@ const infoRows = computed(() => {
           </div>
           <ProgressBar :percent="fillPercent" tone="ok" :show-label="false" class="mt-1.5" />
           <div class="mt-4 flex flex-col gap-2">
-            <button
-              v-for="row in fillRows" :key="row.label" type="button"
-              class="focus-ring -mx-1.5 flex items-center gap-2 rounded-lg px-1.5 py-1 text-left text-[12.5px] hover:bg-soft"
-              @click="row.tab ? goSection(row.tab) : navigateTo(`/objects/${project?.id}`)"
+            <!-- без прав на каталог строки перестают быть ссылками: вести
+                 некуда, соответствующие разделы скрыты -->
+            <component
+              :is="canEdit ? 'button' : 'div'"
+              v-for="row in fillRows" :key="row.label" :type="canEdit ? 'button' : undefined"
+              class="-mx-1.5 flex items-center gap-2 rounded-lg px-1.5 py-1 text-left text-[12.5px]"
+              :class="canEdit ? 'focus-ring hover:bg-soft' : ''"
+              @click="canEdit ? (row.tab ? goSection(row.tab) : navigateTo(`/objects/${project?.id}`)) : undefined"
             >
               <Icon :name="row.done ? 'ph:check-circle-fill' : 'ph:circle-dashed'" :class="row.done ? 'text-ok' : 'text-muted'" size="15" />
               <span :class="row.done ? 'text-ink' : 'text-muted'">{{ row.label }}</span>
-              <Icon name="ph:arrow-right" size="12" class="ml-auto text-muted" />
-            </button>
+              <Icon v-if="canEdit" name="ph:arrow-right" size="12" class="ml-auto text-muted" />
+            </component>
           </div>
         </AppCard>
 
         <AppCard title="Обложка для PDF" subtitle="Первая страница презентации дома">
           <MediaGallery
             :items="building.pdfImageUrl ? [{ id: 'pdf', url: building.pdfImageUrl, name: 'Обложка', kind: 'photo', addedAt: '' }] : []"
-            add-label="Загрузить" empty-hint="Изображение не выбрано"
+            add-label="Загрузить" empty-hint="Изображение не выбрано" :readonly="!canEdit"
             @add="(f) => unitsStore.setBuildingPdfImage(building!.id, f.url)"
             @remove="() => unitsStore.setBuildingPdfImage(building!.id, null)"
           />
@@ -167,7 +185,7 @@ const infoRows = computed(() => {
     <UnitTypePresetsEditor v-else-if="tab === 'presets'" :building="building" />
     <FacadesEditor v-else-if="tab === 'facade'" :building="building" />
 
-    <BuildingEditPanel v-model="showEdit" :project-id="project?.id ?? ''" :building="building" />
+    <BuildingEditPanel v-if="canEdit" v-model="showEdit" :project-id="project?.id ?? ''" :building="building" />
   </div>
   <EmptyState v-else icon="ph:question" title="Дом не найден" class="mt-10" />
 </template>
