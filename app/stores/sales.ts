@@ -4,6 +4,7 @@ import type { Client, ClientDocument, CommKind, CommOutcome, DocKind, Lead, Lead
 import { TODAY } from '~/data/seed'
 import { useUnitsStore } from './units'
 import { useSettingsStore } from './settings'
+import { useAutomationsStore } from './automations'
 
 const LEAD_STAGE_LABELS: Record<LeadStage, string> = {
   new: 'Новая', contacted: 'Связались', visit: 'Показ', reserved: 'Бронь', deal: 'Сделка', lost: 'Отказ',
@@ -352,16 +353,23 @@ export const useSalesStore = defineStore('sales', {
       this.syncNextAction(lead)
       this.logLead(leadId, 'task_done', `Задача выполнена: ${task.title}${result ? ` — ${result}` : ''}`, author)
 
-      // Автоматизация: после показа клиенту перезванивают на следующий день.
-      // Вручную этот шаг ставят через раз — и именно здесь сделки зависают.
-      if (task.kind === 'visit' && useSettingsStore().automations.visitFollowUp
-        && lead.stage !== 'deal' && lead.stage !== 'lost') {
-        this.addLeadTask(leadId, {
-          kind: 'call',
-          title: 'Узнать впечатления после показа',
-          dueAt: new Date(Date.now() + 86400000).toISOString(),
-          assignedTo: task.assignedTo || lead.assignedTo,
-        }, 'Автоматизация')
+      // Показ закрыт — дальше решают правила конструктора: по умолчанию это
+      // follow-up на следующий день, но отдел продаж настраивает сценарий сам
+      if (task.kind === 'visit') {
+        useAutomationsStore().fire('visit.completed', {
+          leadId, assignedTo: task.assignedTo || lead.assignedTo,
+          subject: `Показ по заявке ${this.client(lead.clientId)?.name ?? ''}`.trim(),
+          key: `visit-${taskId}`,
+          facts: {
+            project: lead.interest.projectIds[0] ?? '',
+            priority: lead.priority,
+            stage: lead.stage,
+          },
+          vars: {
+            клиент: this.client(lead.clientId)?.name ?? 'клиент',
+            менеджер: lead.assignedTo,
+          },
+        })
       }
     },
 
@@ -403,17 +411,23 @@ export const useSalesStore = defineStore('sales', {
       }
       this.leads.unshift(lead)
 
-      // Автоматизация: заявка без задачи — главная причина, по которой клиенты
-      // теряются между этапами. Первый шаг ставим сразу, откуда бы заявка ни
-      // пришла: с формы менеджера, из мастера сделок или с сайта.
-      if (useSettingsStore().automations.leadTask) {
-        this.addLeadTask(lead.id, {
-          kind: 'call',
-          title: 'Первый звонок клиенту',
-          dueAt: new Date(Date.now() + 86400000).toISOString(),
-          assignedTo: data.assignedTo,
-        }, 'Автоматизация')
-      }
+      // Заявка без задачи — главная причина, по которой клиенты теряются между
+      // этапами. Что именно поставить, решает правило «Создана заявка»
+      useAutomationsStore().fire('lead.created', {
+        leadId: lead.id, assignedTo: data.assignedTo,
+        subject: `Заявка ${this.client(lead.clientId)?.name ?? ''}`.trim(),
+        key: `lead-${lead.id}`,
+        facts: {
+          project: lead.interest.projectIds[0] ?? '',
+          priority: lead.priority,
+          source: lead.source,
+          budget: lead.budget,
+        },
+        vars: {
+          клиент: this.client(lead.clientId)?.name ?? 'клиент',
+          менеджер: data.assignedTo,
+        },
+      })
 
       return lead
     },
@@ -436,6 +450,22 @@ export const useSalesStore = defineStore('sales', {
       unitsStore.setStatus(unitId, 'reserved')
       const u = unitsStore.unit(unitId)
       if (u) u.reservationId = reservation.id
+
+      useAutomationsStore().fire('reservation.created', {
+        leadId, unitId, reservationId: reservation.id, assignedTo: createdBy,
+        subject: `Бронь ${u ? `№ ${u.number}` : 'объекта'}`,
+        key: `reserved-${reservation.id}`,
+        facts: {
+          project: u?.projectId ?? '', reservationKind: kind, deposit, price: u?.price ?? 0, unitKind: u?.kind ?? '',
+        },
+        vars: {
+          клиент: this.client(clientId)?.name ?? 'клиент',
+          объект: u ? `№ ${u.number}` : 'объект',
+          срок: new Date(reservation.expiresAt).toLocaleDateString('ru-RU'),
+          сумма: String(deposit),
+          менеджер: createdBy,
+        },
+      })
       return reservation
     },
     async cancelReservation(id: string, releaseUnit = true) {

@@ -1,10 +1,12 @@
 import * as repo from '~/repositories/deals'
 import { uid } from '~/repositories/api'
+import { money } from '~/utils/format'
 import type { Contract, DealType, Payment, ScheduleItem } from '~/types/models'
 import { TODAY } from '~/data/seed'
 import { useUnitsStore } from './units'
 import { useSalesStore } from './sales'
 import { useMiscStore } from './misc'
+import { useAutomationsStore } from './automations'
 
 export interface ContractBalance {
   price: number
@@ -113,12 +115,28 @@ export const useDealsStore = defineStore('deals', {
         if (lead && lead.stage !== 'deal') salesStore.moveLead(input.leadId, 'deal', 'Система')
       }
 
-      // Автоматизация: договор подписан — график создан, первый платёж уже
-      // ждёт кассира. Уведомление закрывает разрыв между продажей и финансами.
+      // График платежей — часть договора, он создаётся всегда. А вот кого и как
+      // об этом известить, решают правила конструктора
       useMiscStore().notify({
         key: `auto-contract-${contract.id}`,
         text: `Договор ${contract.number}: создан график на ${items.length} платеж(ей), первый — ${new Date(items[0]!.dueDate).toLocaleDateString('ru-RU')}`,
         kind: contract.status === 'pending_approval' ? 'approval' : 'system',
+      })
+
+      useAutomationsStore().fire('contract.signed', {
+        leadId: input.leadId, contractId: contract.id, unitId: input.unitIds[0],
+        subject: `Договор ${contract.number}`,
+        key: `contract-${contract.id}`,
+        facts: {
+          project: input.projectId, amount: input.price,
+          unitKind: unitsStore.unit(input.unitIds[0] ?? '')?.kind ?? '',
+        },
+        vars: {
+          клиент: salesStore.client(input.clientId)?.name ?? 'клиент',
+          договор: contract.number,
+          сумма: money(input.price, input.currency),
+          проект: unitsStore.project(input.projectId)?.name ?? '',
+        },
       })
 
       return contract
