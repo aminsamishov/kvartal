@@ -26,8 +26,6 @@ watch(tab, (v) => router.replace({ query: { ...route.query, tab: v === 'overview
 
 const boardMode = ref<'manual' | 'import'>('manual')
 
-const cover = computed(() => building.value?.facades.find((f) => f.imageUrl)?.imageUrl ?? building.value?.pdfImageUrl ?? null)
-
 function goSection(next: string) {
   tab.value = next as BuildingTab
   boardMode.value = 'manual'
@@ -93,29 +91,10 @@ const infoRows = computed(() => {
 
 <template>
   <div v-if="building" class="flex flex-col gap-5">
-    <div class="flex flex-wrap items-start justify-between gap-4 rounded-card border border-line bg-panel p-5 shadow-card">
-      <div class="flex items-start gap-3.5">
-        <div class="h-14 w-14 shrink-0 overflow-hidden rounded-xl2">
-          <img v-if="cover" :src="cover" class="h-full w-full object-cover" alt="">
-          <div v-else class="grid h-full w-full place-items-center text-white" :style="{ backgroundImage: `linear-gradient(135deg, ${project?.accent ?? '#6E4453'}, ${project?.accent ?? '#6E4453'}99)` }">
-            <Icon name="ph:building-apartment" size="22" />
-          </div>
-        </div>
-        <div>
-          <div class="flex items-center gap-2">
-            <h1 class="text-[22px] font-semibold tracking-[-0.025em]">{{ building.name }}</h1>
-            <StatusTag v-if="building.badge" tone="plum" size="sm">{{ building.badge }}</StatusTag>
-            <StatusTag v-if="building.archived" tone="neutral" size="sm">В архиве</StatusTag>
-          </div>
-          <p class="mt-1 text-[13px] text-muted">{{ building.address || 'Адрес не указан' }} · {{ unitsCount }} помещений</p>
-        </div>
-      </div>
-      <div class="flex gap-2">
-        <AppButton :icon="building.archived ? 'ph:archive-tray' : 'ph:archive'" @click="toggleArchive">{{ building.archived ? 'Из архива' : 'В архив' }}</AppButton>
-        <AppButton icon="ph:pencil-simple" @click="showEdit = true">Редактировать</AppButton>
-        <AppButton variant="primary" icon="ph:grid-nine" @click="navigateTo(`/board?building=${building.id}`)">Шахматка</AppButton>
-      </div>
-    </div>
+    <BuildingHeader
+      :building="building" :project="project" :fill-percent="fillPercent"
+      @edit="showEdit = true" @archive="toggleArchive"
+    />
 
     <BuildingSectionCards :building="building" @select="goSection" @import="goImport" />
 

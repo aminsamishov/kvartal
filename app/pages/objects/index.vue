@@ -72,6 +72,21 @@ const STATUS_COLOR: Record<UnitStatus, string> = {
   sold: 'var(--c-sold)', installment: 'var(--c-inst)', reserved: 'var(--c-reserve)',
   free: 'var(--c-free)', closed: 'var(--c-closed)',
 }
+/**
+ * Обложка проекта. В узкой полосе карточки генплан превращается в серую
+ * ленту — узнаётся именно дом, поэтому первым берём фасад, и только потом
+ * фото с витрины и генплан.
+ */
+function coverOf(projectId: string) {
+  const p = unitsStore.project(projectId)
+  if (!p) return null
+  const facades = unitsStore.buildingsByProject(projectId).flatMap((b) => b.facades).filter((f) => f.imageUrl)
+  return (facades.find((f) => f.published) ?? facades[0])?.imageUrl
+    ?? p.media.find((m) => m.kind === 'photo')?.url
+    ?? p.masterPlans[0]?.url
+    ?? null
+}
+
 function segments(projectId: string) {
   const units = unitsStore.unitsByProject(projectId)
   return STATUS_ORDER.map((status) => ({
@@ -190,16 +205,27 @@ function segments(projectId: string) {
     <div v-else-if="rows.length" class="grid grid-cols-1 gap-3.5 xl:grid-cols-2">
       <NuxtLink
         v-for="r in rows" :key="r.project.id" :to="`/objects/${r.project.id}`"
-        class="group flex flex-col gap-4 rounded-card border border-line bg-panel p-[18px] shadow-card transition-all hover:-translate-y-px hover:shadow-rise"
+        class="group flex flex-col overflow-hidden rounded-card border border-line bg-panel shadow-card transition-all hover:-translate-y-px hover:shadow-rise"
       >
+        <!-- обложка: проекты должны отличаться друг от друга с первого взгляда -->
+        <div class="relative h-[96px] w-full overflow-hidden bg-soft">
+          <img
+            v-if="coverOf(r.project.id)" :src="coverOf(r.project.id)!"
+            class="h-full w-full object-cover object-top transition-transform duration-300 group-hover:scale-[1.02]" alt=""
+          >
+          <div
+            v-else class="h-full w-full"
+            :style="{ background: `linear-gradient(135deg, ${r.project.accent}, ${r.project.accent}88)` }"
+          />
+          <span class="absolute inset-x-0 bottom-0 h-1" :style="{ background: r.project.accent }" />
+        </div>
+
+        <div class="flex flex-col gap-4 p-[18px]">
         <div class="flex items-start gap-3.5">
           <span
             class="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-xl2 text-[14px] font-bold text-white"
             :style="{ background: r.project.accent }"
-          >
-            <img v-if="r.project.media[0]" :src="r.project.media[0].url" class="h-full w-full object-cover" alt="">
-            <template v-else>{{ projectBadge(r.project.name) }}</template>
-          </span>
+          >{{ projectBadge(r.project.name) }}</span>
           <div class="min-w-0 flex-1">
             <h3 class="truncate text-[15px] font-semibold text-ink group-hover:text-plum">{{ r.project.name }}</h3>
             <p class="truncate text-[12px] text-muted">{{ r.project.address }} · {{ r.project.stage }}</p>
@@ -224,6 +250,7 @@ function segments(projectId: string) {
             <dd class="tabular mt-0.5 text-[13.5px] font-semibold text-ink">{{ c.v }}</dd>
           </div>
         </dl>
+        </div>
       </NuxtLink>
     </div>
 
