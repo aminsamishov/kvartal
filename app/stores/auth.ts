@@ -1,5 +1,6 @@
-import { ROLE_LABELS } from '~/data/catalog'
+import { ROLE_LABELS, USERS } from '~/data/catalog'
 import * as authRepo from '~/repositories/auth'
+import { clone } from '~/repositories/api'
 import type { AppUser } from '~/types/models'
 
 const STORAGE_KEY = 'kvartal.session'
@@ -64,9 +65,20 @@ export const useAuthStore = defineStore('auth', {
       this.step = 'phone'
       this.error = ''
     },
-    loginAsDemo(userId?: string) {
-      // быстрый вход для демонстрации — минуя код
-      this.step = 'code'
+    /**
+     * Вход одним нажатием — для демо-ссылки, которую открывают посторонние.
+     * Раньше кнопка роли только подставляла телефон в поле, и человеку всё
+     * равно приходилось запрашивать код и вводить его: по ссылке, присланной
+     * «посмотреть», это выглядит как неработающий вход.
+     */
+    loginAsDemo(userId: string) {
+      const user = USERS.find((u) => u.id === userId)
+      if (!user) { this.error = 'Демо-пользователь не найден'; return }
+      this.user = clone(user)
+      this.error = ''
+      this.step = 'phone'
+      this.phoneInput = user.phone
+      if (import.meta.client) localStorage.setItem(STORAGE_KEY, JSON.stringify(this.user))
     },
     logout() {
       this.user = null

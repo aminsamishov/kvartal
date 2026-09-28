@@ -1,0 +1,54 @@
+# Публичная демо-ссылка. Фронтенд работает на мок-данных без бэкенда, поэтому
+# собирается в статику и раздаётся с GitHub Pages: ссылка живёт всегда и не
+# зависит от того, включён ли ноутбук.
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# публикацию не параллелим: две сборки подряд должны выкатываться по порядку
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # Сайт отдаётся по адресу вида user.github.io/<репозиторий>/, а не с корня
+      # домена. Без базового пути браузер найдёт index.html, но пойдёт за
+      # скриптами в /_nuxt/ и получит 404 — страница останется белой.
+      - name: Generate static site
+        run: npm run generate
+        env:
+          NUXT_APP_BASE_URL: /${{ github.event.repository.name }}/
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: .output/public
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v4

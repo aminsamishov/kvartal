@@ -7,7 +7,9 @@
     "dev": "nuxt dev",
     "generate": "nuxt generate",
     "preview": "nuxt preview",
-    "postinstall": "nuxt prepare"
+    "postinstall": "nuxt prepare",
+    "serve:static": "node scripts/serve-static.mjs",
+    "demo": "nuxt generate && node scripts/serve-static.mjs"
   },
   "dependencies": {
     "@iconify-json/ph": "^1.2.2",

@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { USERS } from '~/data/catalog'
 import { ROLE_LABELS } from '~/data/catalog'
-import { fmtPhone } from '~/utils/format'
 
 definePageMeta({ layout: 'auth' })
 
@@ -9,8 +8,10 @@ const auth = useAuthStore()
 const phone = ref('')
 const code = ref('')
 
-function quickFill(p: string) {
-  phone.value = fmtPhone(p)
+/** Демо-вход: одно нажатие — и человек внутри, под выбранной ролью. */
+function loginAs(userId: string) {
+  auth.loginAsDemo(userId)
+  if (auth.isAuthed) navigateTo('/')
 }
 
 async function submitPhone() {
@@ -44,8 +45,9 @@ async function submitCode() {
 
         <div class="mt-5 border-t border-line pt-4">
           <p class="mb-2 text-[11.5px] font-semibold uppercase tracking-wide text-muted">Демо-вход — выберите роль</p>
+          <p class="mb-2 text-[12px] text-muted">Один клик — и вы внутри под этой ролью. Права у ролей разные.</p>
           <div class="flex flex-wrap gap-1.5">
-            <Chip v-for="u in USERS.slice(0, 6)" :key="u.id" @click="quickFill(u.phone)">
+            <Chip v-for="u in USERS.slice(0, 6)" :key="u.id" @click="loginAs(u.id)">
               {{ u.name.split(' ')[0] }} · {{ ROLE_LABELS[u.role] }}
             </Chip>
           </div>

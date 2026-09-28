@@ -62,5 +62,14 @@ export default defineNuxtConfig({
     },
   },
 
+  // Демо по ссылке. Vite в dev-режиме отклоняет запросы с чужим Host — через
+  // туннель это выглядит как «Blocked request … add to server.allowedHosts».
+  // Разрешаем только домены туннелей: ведущая точка значит «любой поддомен».
+  vite: {
+    server: {
+      allowedHosts: ['.ngrok-free.app', '.ngrok.app', '.ngrok.io', '.trycloudflare.com'],
+    },
+  },
+
   typescript: { strict: true },
 })
