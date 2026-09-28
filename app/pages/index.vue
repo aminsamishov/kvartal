@@ -8,10 +8,14 @@ import { fmtDateFull, money, moneyCompact, pluralRu } from '~/utils/format'
 definePageMeta({ breadcrumb: [{ label: 'Дашборд' }] })
 
 /**
- * Операционный центр. Дашборд отвечает на вопрос «что делать сейчас», а не
- * «как шли дела в мае»: сверху показатели дня, под ними ближайшее дело и лента
- * с осью времени, справа то, что горит. Графики компании живут ниже и только у
- * того, кому видны её деньги — менеджеру они мешают увидеть свой день.
+ * Дашборд — один на человека, а не два подряд.
+ *
+ * Руководителю нужны деньги компании: выручка, сделки, воронка, просрочка и то,
+ * что ждёт его решения. Менеджеру и финансам — их день: ближайшее дело, лента
+ * с осью времени, платежи и показы на сегодня. Раньше обе картины стояли на
+ * одной странице: директор пролистывал чужой рабочий день, чтобы добраться до
+ * своей аналитики, а его собственный «план на сегодня» был планом отдела и
+ * читался как личный.
  *
  * Клик по делу открывает то, о чём дело: карточку заявки, договор, помещение.
  * Раньше любая строка вела на список заявок, и нужную искали там руками.
@@ -23,6 +27,12 @@ const unitsStore = useUnitsStore()
 const approvalsStore = useApprovalsStore()
 const auth = useAuthStore()
 const ui = useUiStore()
+
+/**
+ * Кому видны деньги компании, тот и смотрит компанию: директор, коммерческий,
+ * финансовый, партнёр, аудитор. Остальные — свой день.
+ */
+const isCompany = computed(() => can('dashboard.company'))
 
 const now = new Date()
 const from = computed(() => startOfDay(now))
@@ -122,23 +132,47 @@ const kpis = computed<MetricItem[]>(() => {
   ]
 
   if (workspace.value === 'finance') {
+    const dueToday = paymentsToday.value.reduce((s, i) => s + (i.amount ?? 0), 0)
+    // без плана на сегодня шкале нечего заполнять: полная полоса рядом с нулём
+    // читалась бы как «всё собрано»
+    const collected = dueToday ? Math.min(100, Math.round((receiptsToday.value / dueToday) * 100)) : 0
     return [
-      base[0]!,
+      // у финансового руководителя дня на экране нет — вместо счётчика личных
+      // дел в главной ячейке стоят деньги сегодняшнего дня
+      isCompany.value
+        ? {
+            key: 'today-money', label: 'Поступило сегодня', value: money(receiptsToday.value),
+            hero: true, tone: 'ok',
+            meter: { pct: collected, caption: dueToday ? `из ${money(dueToday)} по графику на сегодня` : 'на сегодня платежей по графику нет' },
+          }
+        : base[0]!,
       { key: 'pay-today', label: 'Платежи сегодня', value: money(paymentsToday.value.reduce((s, i) => s + (i.amount ?? 0), 0)), hint: `${paymentsToday.value.length} по графику`, to: '/payments' },
-      { key: 'received', label: 'Поступило сегодня', value: money(receiptsToday.value), valueTone: 'ok', to: '/payments' },
+      ...(isCompany.value ? [] : [{ key: 'received', label: 'Поступило сегодня', value: money(receiptsToday.value), valueTone: 'ok' as const, to: '/payments' }]),
       { key: 'pending', label: 'На подтверждении', value: String(dealsStore.pendingPayments.length), valueTone: dealsStore.pendingPayments.length ? 'warn' : undefined, to: '/payments' },
       { key: 'overdue', label: 'Просрочка', value: moneyCompact(overdueAmount.value), valueTone: overdueAmount.value ? 'bad' : undefined, hint: `${overdueContracts.value.length} договоров`, to: '/contracts' },
       { key: 'contracts', label: 'Договоров за месяц', value: String(monthContracts.value.length), to: '/contracts' },
     ]
   }
 
-  if (can('dashboard.company')) {
-    const revenue = unitsStore.units.filter((u) => u.status === 'sold' || u.status === 'installment').reduce((s, u) => s + u.price, 0)
+  if (isCompany.value) {
+    // у руководителя всё про компанию: его личных дел на этом экране нет
+    const sold = unitsStore.units.filter((u) => u.status === 'sold' || u.status === 'installment')
+    const sellable = unitsStore.units.filter((u) => u.kind === 'apartment' || u.kind === 'commercial')
+    const revenue = sold.reduce((s, u) => s + u.price, 0)
+    const realised = sellable.length ? Math.round((sold.length / sellable.length) * 100) : 0
     return [
-      ...base,
+      {
+        key: 'revenue', label: 'Выручка в работе', value: moneyCompact(revenue), hero: true, tone: 'ok',
+        meter: { pct: realised, caption: `${sold.length} из ${sellable.length} помещений продано` },
+      },
+      {
+        key: 'deals', label: 'Сделок за месяц', value: String(monthContracts.value.length),
+        hint: monthContracts.value.length ? moneyCompact(monthContracts.value.reduce((s, c) => s + c.price, 0)) : 'пока нет',
+        to: '/contracts',
+      },
+      { key: 'received', label: 'Поступило сегодня', value: money(receiptsToday.value), valueTone: 'ok', to: '/payments' },
       { key: 'overdue', label: 'Просрочка', value: moneyCompact(overdueAmount.value), valueTone: overdueAmount.value ? 'bad' : undefined, hint: `${overdueContracts.value.length} договоров`, to: '/contracts' },
-      { key: 'leads', label: 'Заявки в работе', value: String(myLeads.value.length), to: '/leads' },
-      { key: 'revenue', label: 'Выручка в работе', value: moneyCompact(revenue), hint: `${monthContracts.value.length} сделок за месяц` },
+      { key: 'leads', label: 'Заявок в работе', value: String(myLeads.value.length), hint: `${overdueTasks.value.length} задач просрочено`, to: '/leads' },
     ]
   }
 
@@ -188,6 +222,13 @@ function openDay(date: Date) {
   navigateTo(`/calendar?date=${date.toISOString().slice(0, 10)}`)
 }
 
+/** Подзаголовок говорит, чей это экран: день человека или сводка компании. */
+const headerSubtitle = computed(() => {
+  const date = fmtDateFull(now.toISOString())
+  if (isCompany.value) return `${date} · сводка компании`
+  return `${date} · ${today.value.length} ${pluralRu(today.value.length, 'событие', 'события', 'событий')} в плане`
+})
+
 const greeting = computed(() => {
   const h = now.getHours()
   const name = auth.user?.name.split(' ')[1] ?? auth.user?.name ?? ''
@@ -197,7 +238,7 @@ const greeting = computed(() => {
 
 <template>
   <div class="flex flex-col gap-4">
-    <PageHeader :title="greeting" :subtitle="`${fmtDateFull(now.toISOString())} · ${today.length} ${pluralRu(today.length, 'событие', 'события', 'событий')} в плане`">
+    <PageHeader :title="greeting" :subtitle="headerSubtitle">
       <template #actions>
         <AppButton v-if="can('calendar.view')" icon="ph:calendar-dots" @click="navigateTo('/calendar')">Календарь</AppButton>
         <AppButton v-if="can('board.view')" icon="ph:grid-nine" @click="navigateTo('/board')">Шахматка</AppButton>
@@ -207,7 +248,12 @@ const greeting = computed(() => {
 
     <MetricStrip :items="kpis" />
 
-    <div class="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+    <!--
+      ДЕНЬ: менеджеру и финансам. Слева ближайшее дело и лента, справа то, что
+      горит. Руководителю этот блок не показываем совсем — день отдела он видит
+      в календаре, а не вместо своей аналитики.
+    -->
+    <div v-if="!isCompany" class="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
       <div class="flex min-w-0 flex-col gap-4">
         <NextAction
           :item="nextItem" :done-count="doneToday" :total="today.length"
@@ -314,13 +360,58 @@ const greeting = computed(() => {
     </div>
 
     <!-- ближайшая неделя -->
-    <template v-if="can('calendar.view')">
+    <template v-if="!isCompany && can('calendar.view')">
       <SectionHeader title="Ближайшая неделя" subtitle="Плотность дней — куда ещё влезет показ" />
       <WeekAhead :items="week" :from="from" @pick="openDay" />
     </template>
 
-    <!-- аналитика компании: только тем, кому видны её деньги -->
-    <template v-if="can('dashboard.company')">
+    <!--
+      РУКОВОДИТЕЛЬ: сначала то, что ждёт его решения, потом деньги компании.
+      Личной ленты дел здесь нет — это второй дашборд на одной странице, из-за
+      которого своя аналитика оказывалась под чужим рабочим днём.
+    -->
+    <template v-if="isCompany">
+      <div class="grid grid-cols-1 gap-4 xl:grid-cols-2">
+        <AppCard
+          title="Просрочки"
+          :subtitle="overdueAmount ? `${moneyCompact(overdueAmount)} по графику · ${overdueContracts.length} ${pluralRu(overdueContracts.length, 'договор', 'договора', 'договоров')}` : 'Всё в сроке'"
+        >
+          <template #actions>
+            <NuxtLink to="/contracts" class="text-[12.5px] font-semibold text-plum hover:underline">Договоры</NuxtLink>
+          </template>
+          <div v-if="overdueContracts.length" class="flex flex-col gap-1">
+            <NuxtLink
+              v-for="x in overdueContracts.slice(0, 6)" :key="x.contract.id" :to="`/contracts/${x.contract.id}`"
+              class="flex items-center gap-2 rounded-lg bg-bad-bg/60 px-2 py-1.5 text-[12.5px] transition-colors hover:bg-bad-bg"
+            >
+              <Icon name="ph:warning-circle" size="14" class="shrink-0 text-bad" />
+              <span class="min-w-0 flex-1 truncate text-ink">{{ salesStore.client(x.contract.clientId)?.name ?? x.contract.number }}</span>
+              <span class="tabular shrink-0 font-semibold text-bad">{{ moneyCompact(x.balance.overdueAmount) }}</span>
+              <span class="tabular shrink-0 text-[11px] text-muted">{{ x.balance.overdueDays }} дн.</span>
+            </NuxtLink>
+          </div>
+          <EmptyState v-else compact icon="ph:check-circle" title="Просроченных платежей нет" />
+        </AppCard>
+
+        <AppCard title="Требует решения" subtitle="Система ждёт руководителя">
+          <div v-if="attention.length" class="-mx-1.5 flex flex-col">
+            <NuxtLink
+              v-for="a in attention" :key="a.key" :to="a.to"
+              class="flex items-center gap-3 rounded-xl2 px-1.5 py-2 transition-colors hover:bg-soft"
+            >
+              <span
+                class="grid h-8 w-8 shrink-0 place-items-center rounded-xl2"
+                :class="{ warn: 'bg-warn-bg text-warn', bad: 'bg-bad-bg text-bad', info: 'bg-info-bg text-info' }[a.tone]"
+              ><Icon :name="a.icon" size="16" /></span>
+              <span class="min-w-0 flex-1 text-[13px] text-ink">{{ a.label }}</span>
+              <span class="tabular text-[15px] font-semibold text-ink">{{ a.count }}</span>
+              <Icon name="ph:caret-right" size="13" class="shrink-0 text-muted" />
+            </NuxtLink>
+          </div>
+          <EmptyState v-else compact icon="ph:check-circle" title="Открытых решений нет" text="Согласования и подтверждения разобраны" />
+        </AppCard>
+      </div>
+
       <SectionHeader title="Аналитика компании" subtitle="Деньги, воронка и фонд за 12 месяцев" />
       <CompanyAnalytics />
     </template>
