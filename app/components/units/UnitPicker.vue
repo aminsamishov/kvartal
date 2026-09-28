@@ -181,7 +181,7 @@ function fromMini(action: 'open' | 'reserve' | 'contract' | 'link', unitId: stri
 
 /**
  * Клиентский путь: блок на фасаде → этаж с планировками → квартира. Панель
- * живёт слева и не закрывает рендер дома — разговор идёт по картинке.
+ * живёт справа и не закрывает рендер дома — разговор идёт по картинке.
  */
 const showcase = ref<{ floor: number; section: number; unitId: string | null } | null>(null)
 

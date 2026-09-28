@@ -11,7 +11,7 @@ import { fmtDateTime } from '~/utils/format'
  *
  * Клик по блоку на фасаде открывает этаж: план, список планировок и цены.
  * Клик по планировке разворачивает её в карточку квартиры — не уходя с
- * рендера дома, который остаётся на экране справа. Это тот самый разговор
+ * рендера дома, который остаётся на экране слева. Это тот самый разговор
  * «вот ваш этаж — вот ваша квартира», ради которого фасад и нужен.
  */
 const props = defineProps<{
@@ -145,10 +145,10 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
     <Transition
       appear
       enter-active-class="transition-transform duration-200 ease-out" leave-active-class="transition-transform duration-150 ease-in"
-      enter-from-class="-translate-x-full" leave-to-class="-translate-x-full"
+      enter-from-class="translate-x-full" leave-to-class="translate-x-full"
     >
       <aside
-        class="fixed bottom-0 left-0 top-16 z-[60] flex w-[min(460px,94vw)] flex-col border-r border-line bg-panel shadow-pop"
+        class="fixed bottom-0 right-0 top-16 z-[60] flex w-[min(460px,94vw)] flex-col border-l border-line bg-panel shadow-pop"
       >
         <!-- шапка: где мы находимся -->
         <header class="flex items-start gap-3 border-b border-line px-4 py-3">
