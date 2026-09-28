@@ -2,15 +2,16 @@
 import type { CommKind, CommOutcome, LeadStage } from '~/types/models'
 import { COMM_OUTCOME_META } from '~/utils/meta'
 import { interestFromLead } from '~/composables/useLeadMatching'
-import type { LeadAction } from '~/utils/leadActions'
 
 /**
  * Карточка заявки — рабочее место менеджера. Весь цикл продажи живёт здесь:
  * обзор, подбор с шахматкой и фасадом, финансы, документы, история. Уходить на
  * другие экраны и терять контекст клиента не нужно.
  *
- * Вкладки, а не одно полотно: блоков стало слишком много, и вертикальная
- * прокрутка на два экрана скрывала главное — что делать прямо сейчас.
+ * Вкладки идут по ходу сделки: кто это → что подобрали → на какие деньги →
+ * какие бумаги → что уже было. На «Обзоре» — клиент и ближайшая задача, и
+ * больше ничего: подбор целиком живёт в своей вкладке, а не повторяется
+ * выжимкой, которая всё равно отправляет туда же.
  */
 const props = defineProps<{ leadId: string | null }>()
 const emit = defineEmits<{ close: []; 'request-lost': [string]; navigate: [string] }>()
@@ -28,6 +29,8 @@ const client = computed(() => (lead.value ? salesStore.client(lead.value.clientI
 const author = computed(() => auth.user?.name ?? 'Система')
 
 const reservation = computed(() => (lead.value ? salesStore.activeReservationForLead(lead.value.id) : undefined))
+// бронь на «Обзоре» появляется, когда ей есть что показать — активную или прошлые
+const hasReservations = computed(() => Boolean(lead.value && salesStore.reservationsForLead(lead.value.id).length))
 const docsCount = computed(() => (lead.value ? salesStore.documentsForLead(lead.value.id).length : 0))
 const contract = computed(() => (lead.value ? dealsStore.contractsForLead(lead.value.id)[0] : undefined))
 
@@ -95,9 +98,14 @@ function goContract(unitId?: string) {
 
 /* -------------------------------- подбор --------------------------------- */
 
-/** Открыть подбор с фильтром из запроса клиента — один клик от «Обзора». */
-function goPicker() {
+/** Фильтр подбора из запроса клиента — прямо на вкладке «Подбор». */
+function applyInterest() {
   if (lead.value) board.applyInterest(scopeKey.value, lead.value.id, interestFromLead(lead.value))
+}
+
+/** Открыть подбор с уже применённым фильтром — из брони, договора и хоткея. */
+function goPicker() {
+  applyInterest()
   tab.value = 'match'
 }
 
@@ -112,49 +120,6 @@ function pickUnit(unitId: string) {
   if (linked) board.deselect(scopeKey.value, unitId)
   else board.select(scopeKey.value, unitId)
   ui.toast(linked ? 'Убрали из подборки клиента' : 'Добавили в подборку клиента', linked ? 'info' : 'ok')
-}
-
-/* ----------------------------- рекомендации ------------------------------ */
-
-const showTaskForm = ref(false)
-const taskKind = ref<'call' | 'visit'>('call')
-const completeSignal = ref(0)
-
-/**
- * Рекомендация должна выполняться одним нажатием — иначе она остаётся
- * советом, который никто не выполняет.
- */
-function runAction(a: LeadAction) {
-  if (!lead.value) return
-  switch (a.kind) {
-    case 'call': startComm('call_out'); break
-    case 'whatsapp': startComm('whatsapp'); break
-    case 'complete_task': tab.value = 'overview'; completeSignal.value++; break
-    case 'task':
-      tab.value = 'overview'
-      taskKind.value = a.key === 'visit' ? 'visit' : 'call'
-      showTaskForm.value = true
-      break
-    case 'picker':
-      goPicker()
-      if (a.unitId) board.select(scopeKey.value, a.unitId)
-      break
-    case 'reserve': reserveUnitId.value = a.unitId ?? null; break
-    case 'extend':
-      if (reservation.value) {
-        salesStore.extendReservation(reservation.value.id, 3, author.value)
-        ui.toast('Бронь продлена на 3 дня', 'ok')
-      }
-      break
-    case 'contract': goContract(a.unitId); break
-    case 'docs': tab.value = 'docs'; break
-    case 'approvals': tab.value = 'finance'; break
-    case 'payment':
-      if (contract.value) navigateTo(`/contracts/${contract.value.id}`)
-      else tab.value = 'finance'
-      break
-    case 'lost': emit('request-lost', lead.value.id); break
-  }
 }
 
 /** Полная карточка помещения поверх карточки заявки — из мини-карточки подбора. */
@@ -209,38 +174,34 @@ const linkedUnits = computed(() => (lead.value?.interestedUnitIds ?? [])
         <TaskComposer :lead-id="lead.id" default-kind="visit" @done="showVisitForm = false" @cancel="showVisitForm = false" />
       </div>
 
-      <!-- задача из рекомендации -->
-      <div v-if="showTaskForm" class="mb-4">
-        <TaskComposer :lead-id="lead.id" :default-kind="taskKind" @done="showTaskForm = false" @cancel="showTaskForm = false" />
-      </div>
-
       <!-- бронь из шапки и из подбора -->
       <div v-if="reserveUnitId" class="mb-4">
         <ReserveComposer :lead-id="lead.id" :unit-id="reserveUnitId" @done="reserveUnitId = null" @cancel="reserveUnitId = null" />
       </div>
 
-      <!-- ОБЗОР -->
-      <div v-if="tab === 'overview'" class="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
+      <!--
+        ОБЗОР: кто клиент и что с ним делать сегодня. Подбор, чек-лист и
+        рекомендации отсюда ушли — каждый из них уводил в свою вкладку, а
+        вместе они закрывали то единственное, ради чего карточку открывают.
+      -->
+      <div v-if="tab === 'overview'" class="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
         <div class="flex min-w-0 flex-col gap-4">
-          <LeadNextAction :lead="lead" :complete-signal="completeSignal" />
-          <LeadAiActions :lead="lead" @act="runAction" />
-          <LeadInterestBlock :lead="lead" @match="goPicker" />
-          <LeadMatchingUnits :lead="lead" @picker="goPicker" @open="pickUnit" />
+          <LeadClientCard :lead="lead" @call="startComm('call_out')" @whatsapp="startComm('whatsapp')" />
         </div>
 
         <div class="flex min-w-0 flex-col gap-4">
-          <AppCard>
-            <LeadChecklist :lead="lead" />
-          </AppCard>
+          <LeadNextAction :lead="lead" />
           <LeadAiSummary :lead="lead" />
-          <LeadReservation :lead="lead" @contract="goContract" />
-          <LeadProfileCard :lead="lead" />
+          <!-- бронь показываем, когда она есть: пустая карточка «брони нет» ничего не сообщает -->
+          <LeadReservation v-if="hasReservations" :lead="lead" @contract="goContract" />
           <LeadRelations :lead="lead" @open-lead="emit('navigate', $event)" />
         </div>
       </div>
 
-      <!-- ПОДБОР -->
+      <!-- ПОДБОР: запрос клиента и весь инструмент подбора в одном месте -->
       <div v-else-if="tab === 'match'" class="flex flex-col gap-4">
+        <LeadInterestBlock :lead="lead" />
+
         <div v-if="linkedUnits.length" class="rounded-card border border-line bg-panel p-3 shadow-card">
           <p class="mb-2 text-[11px] font-semibold uppercase tracking-[0.04em] text-muted">
             Подборка клиента · {{ linkedUnits.length }}
@@ -269,7 +230,7 @@ const linkedUnits = computed(() => (lead.value?.interestedUnitIds ?? [])
       <div v-else-if="tab === 'finance'" class="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
         <LeadFinance :lead="lead" />
         <div class="flex min-w-0 flex-col gap-4">
-          <LeadReservation :lead="lead" @contract="goContract" />
+          <LeadReservation v-if="hasReservations" :lead="lead" @contract="goContract" />
           <AppCard v-if="!contract" title="Договор" subtitle="Оформляется из брони или из подбора">
             <AppButton variant="primary" icon="ph:file-text" block :disabled="lead.stage === 'lost'" @click="goContract()">
               Создать договор
@@ -284,12 +245,7 @@ const linkedUnits = computed(() => (lead.value?.interestedUnitIds ?? [])
       <!-- ИСТОРИЯ -->
       <div v-else class="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
         <LeadTimeline :lead="lead" />
-        <div class="flex min-w-0 flex-col gap-4">
-          <AppCard>
-            <LeadChecklist :lead="lead" />
-          </AppCard>
-          <LeadRelations :lead="lead" @open-lead="emit('navigate', $event)" />
-        </div>
+        <LeadRelations :lead="lead" @open-lead="emit('navigate', $event)" />
       </div>
 
       <!-- карточка помещения поверх карточки заявки: открывается из подбора -->

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { Lead, LeadStage } from '~/types/models'
 import {
-  LEAD_CHANNEL_ICON, LEAD_PIPELINE, LEAD_PRIORITY_META, LEAD_STAGE_COLOR,
+  LEAD_CHANNEL_ICON, LEAD_PIPELINE, LEAD_STAGE_COLOR,
   LEAD_STAGE_ICON, LEAD_STAGE_META,
 } from '~/utils/meta'
 import { fmtPhone, money } from '~/utils/format'
@@ -23,7 +23,26 @@ const client = computed(() => salesStore.client(props.lead.clientId))
 const manager = computed(() => settingsStore.users.find((u) => u.id === props.lead.assignedTo))
 const days = computed(() => salesStore.daysInStage(props.lead))
 const closed = computed(() => props.lead.stage === 'deal' || props.lead.stage === 'lost')
+
+/**
+ * Этап — один переключатель, а не лента из шести плашек.
+ *
+ * Лента занимала верх карточки и предлагала шесть решений сразу, хотя менеджеру
+ * нужно знать одно: где заявка сейчас. Куда её двигать, он решает раз в
+ * несколько дней, и для этого достаточно открыть список.
+ */
+const stageOpen = ref(false)
+const stageRef = ref<HTMLElement | null>(null)
+onClickOutside(stageRef, () => { stageOpen.value = false })
+watch(() => props.lead.id, () => { stageOpen.value = false })
+
+const stages = computed<LeadStage[]>(() => [...LEAD_PIPELINE, 'lost'])
 const reached = computed(() => LEAD_PIPELINE.indexOf(props.lead.stage))
+
+function pick(stage: LeadStage) {
+  stageOpen.value = false
+  if (stage !== props.lead.stage) emit('stage', stage)
+}
 </script>
 
 <template>
@@ -34,8 +53,45 @@ const reached = computed(() => LEAD_PIPELINE.indexOf(props.lead.stage))
       <div class="min-w-0 flex-1">
         <div class="flex flex-wrap items-center gap-2">
           <h2 class="truncate text-[18px] font-semibold tracking-[-0.02em] text-ink">{{ client?.name ?? 'Без клиента' }}</h2>
-          <StatusTag :tone="LEAD_STAGE_META[lead.stage].tone" size="sm" dot>{{ LEAD_STAGE_META[lead.stage].label }}</StatusTag>
-          <span class="tabular text-[11.5px] text-muted">· {{ days }} дн. на этапе</span>
+
+          <!-- текущий этап -->
+          <div ref="stageRef" class="relative">
+            <button
+              type="button"
+              class="focus-ring flex items-center gap-1.5 rounded-full border border-line py-1 pl-2.5 pr-2 text-[12px] font-semibold text-ink transition-colors hover:border-plum"
+              :title="`Этап: ${LEAD_STAGE_META[lead.stage].label}`"
+              @click="stageOpen = !stageOpen"
+            >
+              <span class="h-1.5 w-1.5 shrink-0 rounded-full" :style="{ background: LEAD_STAGE_COLOR[lead.stage] }" />
+              {{ LEAD_STAGE_META[lead.stage].label }}
+              <Icon name="ph:caret-down" size="11" class="text-muted" />
+            </button>
+
+            <div
+              v-if="stageOpen"
+              class="animate-pop-in absolute left-0 top-[calc(100%+4px)] z-30 w-[190px] overflow-hidden rounded-card border border-line bg-panel py-1 shadow-pop"
+            >
+              <p class="px-3 pb-1 pt-1.5 text-[10.5px] font-semibold uppercase tracking-[0.04em] text-muted">Перевести на этап</p>
+              <button
+                v-for="(s, i) in stages" :key="s" type="button"
+                class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12.5px] font-medium transition-colors"
+                :class="[
+                  lead.stage === s ? 'bg-soft text-ink' : 'text-muted hover:bg-soft hover:text-ink',
+                  s === 'lost' ? 'mt-1 border-t border-line pt-2' : '',
+                ]"
+                @click="pick(s)"
+              >
+                <Icon
+                  :name="LEAD_STAGE_ICON[s]" size="13"
+                  :style="{ color: s === lead.stage || reached > i ? LEAD_STAGE_COLOR[s] : undefined }"
+                />
+                {{ LEAD_STAGE_META[s].label }}
+                <Icon v-if="lead.stage === s" name="ph:check-bold" size="11" class="ml-auto text-plum" />
+              </button>
+            </div>
+          </div>
+
+          <span class="tabular text-[11.5px] text-muted">{{ days }} дн. на этапе</span>
           <StatusTag v-if="lead.priority === 'high'" tone="bad" size="sm" icon="ph:flame">Высокий</StatusTag>
         </div>
         <div class="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[12px] text-muted">
@@ -50,10 +106,6 @@ const reached = computed(() => LEAD_PIPELINE.indexOf(props.lead.stage))
           </span>
           <span v-if="manager" class="flex items-center gap-1">
             <Icon name="ph:user" size="12" /> {{ manager.name }}
-          </span>
-          <span class="flex items-center gap-1">
-            <span class="h-1.5 w-1.5 rounded-full" :style="{ background: LEAD_PRIORITY_META[lead.priority].color }" />
-            {{ LEAD_PRIORITY_META[lead.priority].label }}
           </span>
         </div>
       </div>
@@ -72,34 +124,6 @@ const reached = computed(() => LEAD_PIPELINE.indexOf(props.lead.stage))
       <AppButton size="sm" variant="primary" icon="ph:file-text" :disabled="lead.stage === 'lost'" @click="emit('contract')">Создать договор</AppButton>
     </div>
 
-    <!-- воронка -->
-    <div class="mt-3 flex items-stretch gap-1">
-      <button
-        v-for="(s, i) in LEAD_PIPELINE" :key="s" type="button"
-        class="focus-ring relative flex-1 overflow-hidden rounded-lg border px-1.5 pb-1.5 pt-2 text-center transition-colors"
-        :class="lead.stage === s
-          ? 'border-ink bg-ink text-panel'
-          : reached > i
-            ? 'border-line bg-soft text-muted hover:bg-plum-soft'
-            : 'border-dashed border-line text-muted hover:border-plum hover:text-plum'"
-        :title="`Перевести в «${LEAD_STAGE_META[s].label}»`"
-        @click="emit('stage', s)"
-      >
-        <span class="absolute inset-x-0 top-0 h-[3px]" :style="{ background: LEAD_STAGE_COLOR[s], opacity: reached >= i ? 1 : 0.3 }" />
-        <Icon :name="LEAD_STAGE_ICON[s]" size="12" />
-        <span class="mt-0.5 block truncate text-[10px] font-semibold">{{ LEAD_STAGE_META[s].label }}</span>
-      </button>
-      <button
-        type="button"
-        class="focus-ring w-[52px] shrink-0 rounded-lg border px-1 pb-1.5 pt-2 text-center transition-colors"
-        :class="lead.stage === 'lost' ? 'border-bad bg-bad-bg text-bad' : 'border-dashed border-line text-muted hover:border-bad hover:text-bad'"
-        title="Перевести в «Отказ»"
-        @click="emit('stage', 'lost')"
-      >
-        <Icon name="ph:prohibit" size="12" />
-        <span class="mt-0.5 block text-[10px] font-semibold">Отказ</span>
-      </button>
-    </div>
-    <p v-if="lead.lostReason" class="mt-1.5 text-[11.5px] text-bad">Причина отказа: {{ lead.lostReason }}</p>
+    <p v-if="lead.lostReason" class="mt-2 text-[11.5px] text-bad">Причина отказа: {{ lead.lostReason }}</p>
   </header>
 </template>

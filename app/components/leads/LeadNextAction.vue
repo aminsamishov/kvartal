@@ -4,11 +4,7 @@ import { LEAD_TASK_KIND_META } from '~/utils/meta'
 import { fmtDateTime } from '~/utils/format'
 
 // Самый важный блок карточки: что менеджер должен сделать прямо сейчас.
-const props = defineProps<{
-  lead: Lead
-  /** счётчик-сигнал из рекомендаций: открыть форму результата задачи */
-  completeSignal?: number
-}>()
+const props = defineProps<{ lead: Lead }>()
 
 const salesStore = useSalesStore()
 const settingsStore = useSettingsStore()
@@ -22,10 +18,6 @@ const rest = computed(() => open.value.slice(1))
 const closed = computed(() => props.lead.stage === 'deal' || props.lead.stage === 'lost')
 
 const showForm = ref(false)
-watch(() => props.completeSignal, () => {
-  if (next.value) completing.value = true
-  else showForm.value = true
-})
 const showRest = ref(false)
 const completing = ref(false)
 const result = ref('')

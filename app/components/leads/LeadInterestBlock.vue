@@ -3,9 +3,13 @@ import type { Lead, PaymentPlanKind } from '~/types/models'
 import { PAYMENT_PLANS, PAYMENT_PLAN_META } from '~/utils/meta'
 import { money } from '~/utils/format'
 
-// Запрос клиента структурой, а не текстом — из этих полей собирается подбор.
+/**
+ * Запрос клиента структурой, а не текстом — из этих полей собирается подбор.
+ * Блок живёт на вкладке «Подбор», прямо над инструментом, который по нему
+ * фильтрует: отдельной кнопки «подобрать» здесь нет, её роль выполняет
+ * «Фильтр из запроса» в самом подборе — одно действие, а не два одинаковых.
+ */
 const props = defineProps<{ lead: Lead }>()
-const emit = defineEmits<{ match: [] }>()
 
 const unitsStore = useUnitsStore()
 const salesStore = useSalesStore()
@@ -120,9 +124,6 @@ const rows = computed(() => [
         <p v-if="i.comment" class="mt-3 rounded-xl2 bg-soft px-3 py-2 text-[12.5px] leading-snug text-ink">
           <Icon name="ph:quotes" size="13" class="mr-1 text-muted" />{{ i.comment }}
         </p>
-        <AppButton variant="primary" icon="ph:magnifying-glass" block class="mt-3.5" @click="emit('match')">
-          Подобрать квартиры
-        </AppButton>
       </template>
 
       <!-- правка -->
