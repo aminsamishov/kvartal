@@ -35,7 +35,16 @@ const props = withDefaults(defineProps<{
   multi?: boolean
   /** подсказка при наведении; гасим, пока открыта мини-карточка */
   tooltip?: boolean
-}>(), { height: 'min(62vh, 620px)', showLabels: true, multi: false, tooltip: true })
+  /** панель управления масштабом; в компактном плане она лишняя */
+  controls?: boolean
+  /**
+   * Мягкая заливка: контур почти прозрачен и загорается только под курсором.
+   * Нужен там, где областей мало, но они крупные — блоки этажей на фасаде:
+   * сплошная заливка на половину рендера убивает картинку, которую показывают
+   * клиенту.
+   */
+  soft?: boolean
+}>(), { height: 'min(62vh, 620px)', showLabels: true, multi: false, tooltip: true, controls: true, soft: false })
 
 const emit = defineEmits<{
   pick: [string]
@@ -177,6 +186,11 @@ function onMove(e: MouseEvent) {
 watch(() => props.showLabels, (v) => (labels.value = v))
 
 const fillOpacity = (m: ZoneMark) => {
+  if (props.soft) {
+    if (activeId.value === m.id) return 0.42
+    if (m.selected) return 0.46
+    return m.dim ? 0.04 : 0.13
+  }
   if (m.dim) return 0.08
   if (m.selected) return 0.62
   if (activeId.value === m.id) return 0.5
@@ -187,7 +201,7 @@ const fillOpacity = (m: ZoneMark) => {
 <template>
   <div class="flex flex-col gap-2">
     <!-- управление просмотром -->
-    <div class="flex flex-wrap items-center gap-2">
+    <div v-if="controls" class="flex flex-wrap items-center gap-2">
       <div class="flex items-center gap-1 rounded-lg border border-line bg-panel px-1.5 py-1">
         <button
           class="focus-ring grid h-6 w-6 place-items-center rounded text-muted hover:text-ink disabled:opacity-40"
@@ -233,7 +247,7 @@ const fillOpacity = (m: ZoneMark) => {
               fill: m.color,
               fillOpacity: fillOpacity(m),
               stroke: m.selected ? 'var(--ink)' : m.color,
-              strokeWidth: m.selected ? 3 : activeId === m.id ? 2.5 : 1.2,
+              strokeWidth: m.selected ? 3 : activeId === m.id ? 2.5 : soft ? 1 : 1.2,
               strokeDasharray: m.derived ? '4 3' : undefined,
               transition: 'fill-opacity .12s',
             }"
@@ -246,16 +260,20 @@ const fillOpacity = (m: ZoneMark) => {
         <template v-if="labels">
           <span
             v-for="m in marks" :key="`l-${m.id}`"
-            class="pointer-events-none absolute -translate-x-1/2 -translate-y-1/2 whitespace-nowrap rounded px-1 py-px text-center text-[10px] font-bold leading-tight shadow-sm"
+            class="pointer-events-none absolute -translate-x-1/2 -translate-y-1/2 whitespace-nowrap rounded text-center font-bold leading-tight shadow-sm transition-all"
+            :class="soft ? 'px-1.5 py-[3px] text-[10.5px]' : 'px-1 py-px text-[10px]'"
             :style="{
               left: `${centroid(m.polygon).x * 100}%`, top: `${centroid(m.polygon).y * 100}%`,
               background: m.selected ? 'var(--ink)' : m.color,
               color: m.selected ? 'var(--panel)' : readableInk(m.color),
-              opacity: m.dim ? 0.3 : 1,
+              opacity: m.dim ? (soft ? 0.35 : 0.3) : soft && activeId !== m.id ? 0.88 : 1,
             }"
           >
             {{ m.label }}
-            <span v-if="m.sublabel" class="block text-[9px] font-semibold opacity-80">{{ m.sublabel }}</span>
+            <span
+              v-if="m.sublabel && (!soft || activeId === m.id)"
+              class="block text-[9px] font-semibold opacity-80"
+            >{{ m.sublabel }}</span>
           </span>
         </template>
 

@@ -87,6 +87,13 @@ const detailUnit = computed(() => (detailId.value ? unitById.value.get(detailId.
 const explication = computed(() => (detailId.value ? unitsStore.explicationFor(detailId.value) : { rooms: [], own: false }))
 const totals = computed(() => explicationTotals(explication.value.rooms))
 
+function thumbOf(u: Unit) {
+  const preset = u.layoutPresetId
+    ? props.building.unitTypePresets.find((p) => p.id === u.layoutPresetId)
+    : undefined
+  return u.imageUrl || preset?.imageUrl || null
+}
+
 const floorStats = computed(() => {
   const free = floorUnits.value.filter((u) => u.status === 'free').length
   return { total: floorUnits.value.length, free, marked: markedIds.value.size }
@@ -127,6 +134,38 @@ const floorStats = computed(() => {
             <span class="text-[11.5px] text-muted">
               {{ plan.name }} · {{ floorStats.total }} помещ., свободно <b class="text-ink">{{ floorStats.free }}</b>
             </span>
+          </template>
+
+          <!-- та же карточка, что на фасаде: план этажа тоже показывают клиенту -->
+          <template #tip="{ mark }">
+            <template v-if="unitById.get(mark.id)">
+              <div class="flex items-center gap-2">
+                <span
+                  class="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-lg border border-line bg-soft"
+                >
+                  <img
+                    v-if="thumbOf(unitById.get(mark.id)!)" :src="thumbOf(unitById.get(mark.id)!)!"
+                    class="h-full w-full object-contain" alt=""
+                  >
+                  <Icon v-else name="ph:floor-plan" size="15" class="text-muted" />
+                </span>
+                <div class="min-w-0">
+                  <p class="tabular text-[13px] font-semibold leading-tight text-ink">№ {{ unitById.get(mark.id)!.number }}</p>
+                  <p class="text-[11px] leading-tight text-muted">
+                    {{ unitById.get(mark.id)!.rooms || '—' }}к · {{ fmtArea(unitById.get(mark.id)!.area) }}
+                  </p>
+                </div>
+                <StatusTag :tone="UNIT_STATUS_META[unitById.get(mark.id)!.status].tone" size="sm" class="ml-auto shrink-0">
+                  {{ UNIT_STATUS_META[unitById.get(mark.id)!.status].label }}
+                </StatusTag>
+              </div>
+              <p class="tabular mt-1.5 text-[15px] font-semibold text-ink">{{ money(unitById.get(mark.id)!.price) }}</p>
+              <p class="tabular text-[11px] text-muted">
+                {{ money(Math.round(unitById.get(mark.id)!.price / (unitById.get(mark.id)!.area || 1))) }}/м²
+                <template v-if="scores?.get(mark.id)"> · совпадение <b class="text-plum">{{ scores!.get(mark.id)!.score }}%</b></template>
+              </p>
+              <p class="mt-1 text-[11px] font-semibold text-plum">Клик — открыть квартиру</p>
+            </template>
           </template>
         </UnitZoneCanvas>
 

@@ -91,3 +91,127 @@ export function facadeMarkupStats(facade: FacadeView | undefined, unitsCount: nu
   const floorsMarked = (facade?.zones ?? []).filter((z) => z.refId.startsWith('floor:')).length
   return { hand, floorsMarked, total: unitsCount, derived: Math.max(0, unitsCount - hand) }
 }
+
+/* --------------------------- блоки: секция × этаж -------------------------- */
+
+export interface FacadeBlockZone {
+  /** `${section}:${floor}` — секция и этаж однозначно задают блок */
+  key: string
+  section: number
+  floor: number
+  polygon: ZonePoint[]
+  unitIds: string[]
+  /** ни одна квартира блока не размечена руками */
+  derived: boolean
+}
+
+/**
+ * Блоки на фасаде: один контур на пересечение подъезда и этажа.
+ *
+ * Клиенту на рендере не нужны контуры каждого окна — ему нужно понять, где
+ * подъезд, где этаж и что там есть. Поэтому в режиме продажи фасад размечен
+ * блоками: контур блока — объединяющий прямоугольник контуров его квартир,
+ * откуда бы они ни взялись (ручная разметка или полоса этажа).
+ */
+export function facadeBlockZones(input: {
+  facade: FacadeView | undefined
+  floors: number
+  units: Unit[]
+}): FacadeBlockZone[] {
+  const zones = facadeUnitZones(input)
+  const byUnit = new Map(input.units.map((u) => [u.id, u]))
+  const groups = new Map<string, { section: number; floor: number; zones: FacadeUnitZone[] }>()
+
+  for (const z of zones) {
+    const unit = byUnit.get(z.unitId)
+    if (!unit) continue
+    const key = `${unit.section}:${unit.floor}`
+    const group = groups.get(key) ?? { section: unit.section, floor: unit.floor, zones: [] }
+    group.zones.push(z)
+    groups.set(key, group)
+  }
+
+  return [...groups.entries()].map(([key, group]) => {
+    const xs = group.zones.flatMap((z) => z.polygon.map((p) => p.x))
+    const ys = group.zones.flatMap((z) => z.polygon.map((p) => p.y))
+    const x0 = Math.min(...xs); const x1 = Math.max(...xs)
+    const y0 = Math.min(...ys); const y1 = Math.max(...ys)
+    return {
+      key,
+      section: group.section,
+      floor: group.floor,
+      polygon: [{ x: x0, y: y0 }, { x: x1, y: y0 }, { x: x1, y: y1 }, { x: x0, y: y1 }],
+      unitIds: group.zones.map((z) => z.unitId),
+      derived: group.zones.every((z) => z.derived),
+    }
+  }).sort((a, b) => b.floor - a.floor || a.section - b.section)
+}
+
+export interface RoomTypeSummary {
+  rooms: number
+  /** сколько таких квартир в блоке */
+  count: number
+  free: number
+  /** минимальная цена среди свободных, иначе среди всех */
+  minPrice: number
+  minArea: number
+  maxArea: number
+}
+
+export interface BlockSummary {
+  total: number
+  free: number
+  reserved: number
+  sold: number
+  /** минимальная цена свободной квартиры блока */
+  minPrice: number
+  byRooms: RoomTypeSummary[]
+}
+
+/**
+ * Что есть в блоке: сколько квартир какого типа и от какой суммы. Ровно на
+ * этот вопрос отвечает менеджер, когда клиент тычет пальцем в этаж на рендере.
+ */
+export function blockSummary(units: Unit[]): BlockSummary {
+  const sellable = units.filter((u) => u.kind === 'apartment' || u.kind === 'commercial')
+  const free = sellable.filter((u) => u.status === 'free')
+
+  const byRooms = new Map<number, Unit[]>()
+  for (const u of sellable) {
+    const list = byRooms.get(u.rooms) ?? []
+    list.push(u)
+    byRooms.set(u.rooms, list)
+  }
+
+  return {
+    total: sellable.length,
+    free: free.length,
+    reserved: sellable.filter((u) => u.status === 'reserved').length,
+    sold: sellable.filter((u) => u.status === 'sold' || u.status === 'installment').length,
+    minPrice: free.length ? Math.min(...free.map((u) => u.price)) : 0,
+    byRooms: [...byRooms.entries()]
+      .map(([rooms, list]) => {
+        const freeOnes = list.filter((u) => u.status === 'free')
+        const pricePool = freeOnes.length ? freeOnes : list
+        return {
+          rooms,
+          count: list.length,
+          free: freeOnes.length,
+          minPrice: Math.min(...pricePool.map((u) => u.price)),
+          minArea: Math.min(...list.map((u) => u.area)),
+          maxArea: Math.max(...list.map((u) => u.area)),
+        }
+      })
+      .sort((a, b) => a.rooms - b.rooms),
+  }
+}
+
+/** Цвет блока по остатку: клиенту видно, где ещё есть выбор. */
+export function blockTone(summary: BlockSummary): { color: string; label: string } {
+  if (!summary.total) return { color: 'var(--c-closed)', label: 'нет помещений' }
+  if (!summary.free) return { color: 'var(--c-sold)', label: 'всё продано' }
+  const share = summary.free / summary.total
+  if (share <= 0.25) return { color: 'var(--c-inst)', label: 'осталось мало' }
+  if (share <= 0.5) return { color: 'var(--c-reserve)', label: 'выбор ограничен' }
+  return { color: 'var(--c-free)', label: 'есть выбор' }
+}

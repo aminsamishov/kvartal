@@ -177,6 +177,35 @@ function fromMini(action: 'open' | 'reserve' | 'contract' | 'link', unitId: stri
   else emit('link', unitId)
 }
 
+/* ------------------------------ витрина этажа ----------------------------- */
+
+/**
+ * Клиентский путь: блок на фасаде → этаж с планировками → квартира. Панель
+ * живёт слева и не закрывает рендер дома — разговор идёт по картинке.
+ */
+const showcase = ref<{ floor: number; section: number; unitId: string | null } | null>(null)
+
+function openFloorShowcase(payload: { floor: number; section: number }) {
+  showcase.value = { floor: payload.floor, section: payload.section, unitId: null }
+  board.setFloor(props.scopeKey, payload.floor)
+}
+
+function openUnitShowcase(unitId: string) {
+  const unit = unitsStore.unit(unitId)
+  if (!unit) return
+  showcase.value = { floor: unit.floor, section: unit.section, unitId }
+  board.setFloor(props.scopeKey, unit.floor)
+}
+
+/** «Открыть план этажа» из панели — тот же этаж отдельным видом. */
+function showFloorPlan(floor: number) {
+  board.setFloor(props.scopeKey, floor)
+  board.setView(props.scopeKey, 'floor')
+  showcase.value = null
+}
+
+watch(() => scope.value.buildingId, () => { showcase.value = null })
+
 /* -------------------------------- сравнение ------------------------------- */
 
 /**
@@ -339,12 +368,12 @@ watch(() => scope.value.selected.length, (n) => { if (n < 2) compareTray.value =
         v-else-if="scope.view === 'facade'"
         :scope-key="scopeKey" :building="building" :units="units" :match-ids="matchIds" :scores="scores" :tooltip="!miniId"
         :can-edit="canEdit"
-        @open="onUnitClick"
+        @open="onUnitClick" @block="openFloorShowcase"
       />
       <UnitFloorPlanView
         v-else-if="scope.view === 'floor'"
         :scope-key="scopeKey" :building="building" :units="units" :match-ids="matchIds" :scores="scores" :tooltip="!miniId"
-        @open="onUnitClick"
+        @open="openUnitShowcase"
       />
       <UnitListTable
         v-else
@@ -373,6 +402,19 @@ watch(() => scope.value.selected.length, (n) => { if (n < 2) compareTray.value =
       @contract="fromMini('contract', $event)"
       @link="fromMini('link', $event)"
       @toggle-select="board.toggleSelect(scopeKey, $event)"
+    />
+
+    <UnitShowcasePanel
+      v-if="showcase && building"
+      :building="building" :units="units" :scope-key="scopeKey"
+      :floor="showcase.floor" :section="showcase.section" :unit-id="showcase.unitId"
+      :project-name="project?.name"
+      @close="showcase = null"
+      @update:floor="showcase = { ...showcase, floor: $event, unitId: null }"
+      @update:unit="showcase = { ...showcase, unitId: $event }"
+      @open-plan="showFloorPlan"
+      @open="emit('open', $event)"
+      @reserve="emit('reserve', $event)"
     />
 
     <UnitCompareModal

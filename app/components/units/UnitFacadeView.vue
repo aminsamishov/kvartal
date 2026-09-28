@@ -2,7 +2,7 @@
 import type { Building, Unit } from '~/types/models'
 import type { MatchedUnit } from '~/composables/useLeadMatching'
 import type { ZoneMark } from '~/components/units/UnitZoneCanvas.vue'
-import { facadeMarkupStats, facadeUnitZones } from '~/utils/facade'
+import { blockSummary, blockTone, facadeBlockZones, facadeMarkupStats, facadeUnitZones } from '~/utils/facade'
 import { FACADE_TAG_META, UNIT_BOARD_COLOR, UNIT_STATUS_META } from '~/utils/meta'
 import { area as fmtArea, money, moneyCompact } from '~/utils/format'
 
@@ -28,7 +28,11 @@ const props = withDefaults(defineProps<{
   /** доступен ли режим разметки: в карточке заявки он ни к чему */
   canEdit?: boolean
 }>(), { tooltip: true, canEdit: false })
-const emit = defineEmits<{ open: [string] }>()
+const emit = defineEmits<{
+  open: [string]
+  /** клик по блоку: показываем клиенту этаж — план, планировки и цены */
+  block: [{ floor: number; section: number }]
+}>()
 
 const board = useBoardStore()
 const unitsStore = useUnitsStore()
@@ -56,9 +60,56 @@ const zones = computed(() => facadeUnitZones({
   floors: props.building.floors,
   units: props.units,
 }))
+
+/**
+ * В продаже фасад размечен блоками «подъезд × этаж»: клиенту на рендере не
+ * нужны контуры каждого окна, ему нужно увидеть, где подъезд, где этаж и что
+ * там есть. Поквартирные контуры остаются в редакторе — это техника.
+ */
+const blocks = computed(() => facadeBlockZones({
+  facade: facade.value,
+  floors: props.building.floors,
+  units: props.units,
+}))
+
+const blockInfo = computed(() => {
+  const map = new Map<string, ReturnType<typeof blockSummary>>()
+  const byId = new Map(props.units.map((u) => [u.id, u]))
+  for (const b of blocks.value) {
+    map.set(b.key, blockSummary(b.unitIds.map((id) => byId.get(id)).filter((u): u is Unit => !!u)))
+  }
+  return map
+})
+
+const blockMarks = computed<ZoneMark[]>(() => blocks.value.map((b) => {
+  const info = blockInfo.value.get(b.key)!
+  const tone = blockTone(info)
+  const matched = b.unitIds.some((id) => props.matchIds.has(id))
+  return {
+    id: b.key,
+    polygon: b.polygon,
+    color: tone.color,
+    // на рендере — только число свободных; цена и разбор по типам живут в подсказке
+    label: info.free ? String(info.free) : '—',
+    sublabel: info.minPrice ? `от ${moneyCompact(info.minPrice)}` : undefined,
+    dim: !matched,
+  }
+}))
+
+function blockAt(key: string) {
+  const zone = blocks.value.find((b) => b.key === key)
+  const info = blockInfo.value.get(key)
+  return zone && info ? { zone, info, tone: blockTone(info) } : null
+}
+
+function onBlockPick(key: string) {
+  const zone = blocks.value.find((b) => b.key === key)
+  if (zone) emit('block', { floor: zone.floor, section: zone.section })
+}
 const stats = computed(() => facadeMarkupStats(facade.value, props.units.filter((u) => u.floor >= 1).length))
 
 const unitById = computed(() => new Map(props.units.map((u) => [u.id, u])))
+const ROOM_LABEL: Record<number, string> = { 0: 'Студия/коммерция', 1: '1-комнатные', 2: '2-комнатные', 3: '3-комнатные', 4: '4-комнатные' }
 const selected = computed(() => new Set(scope.value.selected))
 
 const marks = computed<ZoneMark[]>(() => zones.value.flatMap((z) => {
@@ -126,7 +177,47 @@ const priceRange = computed(() => {
     </div>
 
     <template v-if="facade?.imageUrl">
+      <!-- продажа: блоки «подъезд × этаж», клик открывает этаж клиенту -->
       <UnitZoneCanvas
+        v-if="mode === 'sale'"
+        :image-url="facade.imageUrl" :marks="blockMarks" :tooltip="tooltip" soft
+        @pick="onBlockPick" @toggle="onBlockPick"
+      >
+        <template #actions>
+          <span class="hidden items-center gap-1.5 text-[11.5px] text-muted sm:flex">
+            <Icon name="ph:cursor-click" size="13" /> Клик по этажу — планировки и цены
+          </span>
+        </template>
+        <template #tip="{ mark }">
+          <template v-if="blockAt(mark.id)">
+            <p class="flex items-center gap-1.5 text-[13px] font-semibold text-ink">
+              <span class="h-2 w-2 shrink-0 rounded-full" :style="{ background: mark.color }" />
+              {{ blockAt(mark.id)!.zone.section ? `${blockAt(mark.id)!.zone.section} подъезд · ` : '' }}{{ blockAt(mark.id)!.zone.floor }} этаж
+            </p>
+            <p class="mt-0.5 text-[11.5px] text-muted">
+              Свободно <b class="tabular text-ink">{{ blockAt(mark.id)!.info.free }}</b> из {{ blockAt(mark.id)!.info.total }} · {{ blockAt(mark.id)!.tone.label }}
+            </p>
+
+            <dl class="mt-1.5 flex flex-col gap-1 border-t border-line pt-1.5 text-[11.5px]">
+              <div v-for="r in blockAt(mark.id)!.info.byRooms" :key="r.rooms" class="flex items-baseline justify-between gap-2">
+                <dt class="text-muted">
+                  {{ ROOM_LABEL[r.rooms] ?? `${r.rooms}-комнатные` }}
+                  <span class="tabular">· {{ r.count }} шт.</span>
+                </dt>
+                <dd class="tabular shrink-0 font-semibold" :class="r.free ? 'text-ink' : 'text-muted line-through'">
+                  от {{ moneyCompact(r.minPrice) }}
+                </dd>
+              </div>
+            </dl>
+
+            <p class="mt-1.5 text-[11px] font-semibold text-plum">Открыть этаж →</p>
+          </template>
+        </template>
+      </UnitZoneCanvas>
+
+      <!-- редактор: поквартирные контуры и служебные слои -->
+      <UnitZoneCanvas
+        v-else
         :image-url="facade.imageUrl" :marks="marks" :tooltip="tooltip"
         @pick="emit('open', $event)" @toggle="board.toggleSelect(scopeKey, $event)"
       >
@@ -157,7 +248,22 @@ const priceRange = computed(() => {
       </UnitZoneCanvas>
 
       <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
-        <div class="flex flex-wrap items-center gap-2.5">
+        <!-- продажа: легенда об остатке, а не о статусах отдельных квартир -->
+        <div v-if="mode === 'sale'" class="flex flex-wrap items-center gap-2.5">
+          <span
+            v-for="l in [
+              { label: 'Есть выбор', color: 'var(--c-free)' },
+              { label: 'Выбор ограничен', color: 'var(--c-reserve)' },
+              { label: 'Осталось мало', color: 'var(--c-inst)' },
+              { label: 'Всё продано', color: 'var(--c-sold)' },
+            ]" :key="l.label"
+            class="flex items-center gap-1.5 text-[11.5px] text-muted"
+          >
+            <span class="h-2.5 w-2.5 rounded-sm" :style="{ background: l.color }" />{{ l.label }}
+          </span>
+        </div>
+
+        <div v-else class="flex flex-wrap items-center gap-2.5">
           <span v-for="l in statusLegend" :key="l.status" class="flex items-center gap-1.5 text-[11.5px] text-muted">
             <span class="h-2.5 w-2.5 rounded-sm" :style="{ background: l.color }" />
             {{ l.label }} <b class="tabular text-ink">{{ l.count }}</b>
