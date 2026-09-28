@@ -89,11 +89,13 @@ export default <Partial<Config>>{
         'toast-in': { from: { opacity: '0', transform: 'translateY(10px)' }, to: { opacity: '1', transform: 'translateY(0)' } },
         'fade-in': { from: { opacity: '0' }, to: { opacity: '1' } },
         'pop-in': { from: { opacity: '0', transform: 'scale(.97) translateY(4px)' }, to: { opacity: '1', transform: 'scale(1) translateY(0)' } },
+        'drawer-in': { from: { transform: 'translateX(100%)' }, to: { transform: 'translateX(0)' } },
       },
       animation: {
         'toast-in': 'toast-in .22s ease-out',
         'fade-in': 'fade-in .18s ease-out',
         'pop-in': 'pop-in .16s ease-out',
+        'drawer-in': 'drawer-in .22s cubic-bezier(.22,.61,.36,1)',
       },
     },
   },

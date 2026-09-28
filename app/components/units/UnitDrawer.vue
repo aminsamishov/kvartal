@@ -8,7 +8,7 @@ import { zoneCentroid, zonePointsAttr } from '~/utils/zones'
 import { bestPromoForUnit } from '~/utils/board'
 import type { ZoneOption } from '~/components/units/ImageZoneEditor.vue'
 
-const props = defineProps<{ unitId: string | null }>()
+const props = defineProps<{ unitId: string | null; docked?: boolean }>()
 const emit = defineEmits<{ close: []; navigate: [string] }>()
 
 const unitsStore = useUnitsStore()
@@ -207,7 +207,12 @@ function setStatus(status: UnitStatus) {
 </script>
 
 <template>
-  <AppDrawer v-model="open" :title="unit ? `№ ${unit.number}` : ''" :subtitle="project && building ? `${project.name} · ${building.name}` : ''" width="min(580px, 100vw)">
+  <AppDrawer
+    v-model="open" :docked="docked"
+    :title="unit ? `№ ${unit.number}` : ''"
+    :subtitle="project && building ? `${project.name} · ${building.name}` : ''"
+    width="min(580px, 100vw)"
+  >
     <template v-if="unit">
       <div class="flex flex-wrap items-center gap-2">
         <StatusTag :tone="UNIT_STATUS_META[unit.status].tone" dot>{{ UNIT_STATUS_META[unit.status].label }}</StatusTag>

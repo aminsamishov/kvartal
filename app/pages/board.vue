@@ -61,27 +61,35 @@ const expiring = computed(() => salesStore.activeReservations
 </script>
 
 <template>
-  <div class="flex flex-col gap-4">
-    <PageHeader
-      title="Шахматка"
-      :subtitle="`Разрез дома по секциям и этажам · ${stats.total} помещений, свободно ${stats.free}, в брони ${stats.reserved}`"
-    >
-      <template #actions>
-        <AppButton v-if="expiring" icon="ph:hourglass" @click="board.setFilters(SCOPE, { ...scope.filters, statuses: ['reserved'] })">
-          Брони на исходе
-          <span class="grid h-4 min-w-4 place-items-center rounded-full bg-warn px-1 text-[10px] font-bold text-white">{{ expiring }}</span>
-        </AppButton>
-        <AppButton variant="primary" icon="ph:magic-wand" @click="navigateTo('/deals/new')">Новая сделка</AppButton>
-      </template>
-    </PageHeader>
+  <!--
+    Карточка помещения пристыкована справа, а не лежит поверх затемнения:
+    шахматка под ней сужается, но остаётся рабочей. Менеджер открывает
+    квартиру и тут же водит по соседним, сравнивая их, — с модальной
+    карточкой её приходилось закрывать на каждый шаг.
+  -->
+  <div class="flex items-start gap-4">
+    <div class="flex min-w-0 flex-1 flex-col gap-4">
+      <PageHeader
+        title="Шахматка"
+        :subtitle="`Разрез дома по секциям и этажам · ${stats.total} помещений, свободно ${stats.free}, в брони ${stats.reserved}`"
+      >
+        <template #actions>
+          <AppButton v-if="expiring" icon="ph:hourglass" @click="board.setFilters(SCOPE, { ...scope.filters, statuses: ['reserved'] })">
+            Брони на исходе
+            <span class="grid h-4 min-w-4 place-items-center rounded-full bg-warn px-1 text-[10px] font-bold text-white">{{ expiring }}</span>
+          </AppButton>
+          <AppButton variant="primary" icon="ph:magic-wand" @click="navigateTo('/deals/new')">Новая сделка</AppButton>
+        </template>
+      </PageHeader>
 
-    <UnitPicker
-      :scope-key="SCOPE" :project-id="projectId" :can-edit="can('unit.editStatus')"
-      @open="activeUnitId = $event"
-      @reserve="activeUnitId = $event"
-      @contract="goContract"
-    />
+      <UnitPicker
+        :scope-key="SCOPE" :project-id="projectId" :can-edit="can('unit.editStatus')"
+        @open="activeUnitId = $event"
+        @reserve="activeUnitId = $event"
+        @contract="goContract"
+      />
+    </div>
 
-    <UnitDrawer :unit-id="activeUnitId" @close="activeUnitId = null" @navigate="activeUnitId = $event" />
+    <UnitDrawer docked :unit-id="activeUnitId" @close="activeUnitId = null" @navigate="activeUnitId = $event" />
   </div>
 </template>
