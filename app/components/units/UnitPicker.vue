@@ -24,13 +24,22 @@ const props = withDefaults(defineProps<{
   hideProject?: boolean
   /** id помещений, уже добавленных в подборку клиента */
   linkedIds?: string[]
-}>(), { canEdit: false, linkedIds: () => [] })
+  /**
+   * Витрина показа пристыкована к подбору, а не лежит поверх него: рендер
+   * дома сужается, но остаётся на экране. Так она ведёт себя там, где подбор
+   * — главный экран (шахматка). Внутри карточки заявки места на колонку нет,
+   * поэтому там витрина по-прежнему накрывает экран.
+   */
+  docked?: boolean
+}>(), { canEdit: false, linkedIds: () => [], docked: false })
 
 const emit = defineEmits<{
   open: [string]
   reserve: [string]
   contract: [string]
   link: [string]
+  /** витрина заняла правую колонку — карточке помещения там больше не место */
+  'close-card': []
 }>()
 
 const board = useBoardStore()
@@ -188,6 +197,7 @@ const showcase = ref<{ floor: number; section: number; unitId: string | null } |
 function openFloorShowcase(payload: { floor: number; section: number }) {
   showcase.value = { floor: payload.floor, section: payload.section, unitId: null }
   board.setFloor(props.scopeKey, payload.floor)
+  emit('close-card')
 }
 
 function openUnitShowcase(unitId: string) {
@@ -195,6 +205,16 @@ function openUnitShowcase(unitId: string) {
   if (!unit) return
   showcase.value = { floor: unit.floor, section: unit.section, unitId }
   board.setFloor(props.scopeKey, unit.floor)
+  emit('close-card')
+}
+
+/**
+ * «Открыть полную карточку» — это передача эстафеты, а не второе окно:
+ * витрина уходит, её место занимает карточка помещения.
+ */
+function openFullCard(unitId: string) {
+  showcase.value = null
+  emit('open', unitId)
 }
 
 /** «Открыть план этажа» из панели — тот же этаж отдельным видом. */
@@ -270,150 +290,158 @@ watch(() => scope.value.selected.length, (n) => { if (n < 2) compareTray.value =
 </script>
 
 <template>
-  <div class="flex flex-col gap-3" @pointerdown="trackPointer">
-    <!-- цепочка навигации и представления -->
-    <div class="flex flex-wrap items-center gap-2">
-      <AppSelect
-        v-if="!hideProject && projects.length > 1"
-        :model-value="projectId" class="w-[190px]"
-        :options="projects.map((p) => ({ value: p.id, label: p.name }))"
-        @update:model-value="projectId = $event"
-      />
-
-      <nav class="flex min-w-0 flex-wrap items-center gap-1">
-        <template v-for="(step, i) in chain" :key="step.key">
-          <Icon v-if="i" name="ph:caret-right" size="11" class="shrink-0 text-muted" />
-          <button
-            type="button"
-            class="focus-ring shrink-0 rounded-lg px-2 py-1 text-[12.5px] font-semibold transition-colors"
-            :class="step.active ? 'bg-soft text-ink' : 'text-muted hover:text-ink'"
-            @click="board.setView(scopeKey, step.view)"
-          >{{ step.label }}</button>
-        </template>
-      </nav>
-
-      <SegmentedControl
-        :model-value="scope.view" class="ml-auto shrink-0" :options="VIEWS"
-        @update:model-value="board.setView(scopeKey, $event as PickerView)"
-      />
-    </div>
-
-    <!-- корпуса: на генплане не нужны, там дома выбирают прямо на плане -->
-    <div v-if="scope.view !== 'master' && buildings.length > 1" class="flex gap-1.5 overflow-x-auto">
-      <button
-        v-for="b in buildings" :key="b.id" type="button"
-        class="focus-ring flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border px-2.5 py-1.5 text-[12.5px] font-semibold transition-colors"
-        :class="scope.buildingId === b.id ? 'border-ink bg-ink text-panel' : 'border-line bg-panel text-muted hover:text-ink'"
-        @click="board.setBuilding(scopeKey, b.id)"
-      >
-        {{ b.name }}
-        <span
-          class="tabular rounded-full px-1.5 text-[10.5px]"
-          :class="scope.buildingId === b.id ? 'bg-panel/20' : 'bg-soft text-ink'"
-        >{{ buildingMatchCount(b.id) }}</span>
-      </button>
-    </div>
-
-    <!-- фильтры: липкие, чтобы не возвращаться к ним прокруткой -->
-    <div v-if="scope.view !== 'master'" ref="filterSentinel" class="h-px" />
-    <div
-      v-if="scope.view !== 'master'"
-      class="sticky top-[62px] z-20 -mx-1 rounded-card border px-2 py-2 transition-all duration-150"
-      :class="stuck ? 'border-line bg-panel/92 shadow-card backdrop-blur' : 'border-transparent bg-transparent'"
-    >
-      <UnitFilterBar v-model="filters" :units="units" :matched="matchIds.size" />
-    </div>
-
-    <!-- подбор под клиента -->
-    <div v-if="leadId && scope.view !== 'master'" class="flex flex-wrap items-center gap-2 rounded-xl2 bg-soft px-3 py-2">
-      <Icon name="ph:target" size="15" class="shrink-0 text-plum" />
-      <p class="min-w-0 flex-1 text-[12px] text-muted">
-        <template v-if="scoring">Проценты считаются по запросу клиента — клик по квартире откроет карточку с разбором.</template>
-        <template v-else>Заполните запрос клиента на вкладке «Обзор» — подбор начнёт считать совпадение.</template>
-      </p>
-      <AppButton size="sm" icon="ph:funnel" @click="applyInterest">Фильтр из запроса</AppButton>
-    </div>
-
-    <!-- генплан -->
-    <UnitMasterPlanView
-      v-if="scope.view === 'master' && project"
-      :scope-key="scopeKey" :project="project" :buildings="buildings" :units="projectUnits"
-      @pick="pickBuilding" @board="boardBuilding"
-    />
-
-    <template v-else-if="building">
-      <div v-if="scope.view === 'board'" class="flex flex-wrap items-center gap-2">
-        <SegmentedControl
-          :model-value="scope.colorMode"
-          :options="[{ value: 'status', label: 'Статус', icon: 'ph:tag' }, { value: 'payment', label: 'Оплата', icon: 'ph:hand-coins' }]"
-          @update:model-value="board.setColorMode(scopeKey, $event as 'status' | 'payment')"
+  <!--
+    Подбор и витрина показа стоят рядом, а не друг на друге: когда витрина
+    пристыкована, рендер дома сужается, но менеджер продолжает водить по
+    фасаду, не закрывая карточку. Без витрины колонка одна, и ряд ведёт себя
+    как обычный блок.
+  -->
+  <div class="flex items-start gap-4">
+    <div class="flex min-w-0 flex-1 flex-col gap-3" @pointerdown="trackPointer">
+      <!-- цепочка навигации и представления -->
+      <div class="flex flex-wrap items-center gap-2">
+        <AppSelect
+          v-if="!hideProject && projects.length > 1"
+          :model-value="projectId" class="w-[190px]"
+          :options="projects.map((p) => ({ value: p.id, label: p.name }))"
+          @update:model-value="projectId = $event"
         />
+
+        <nav class="flex min-w-0 flex-wrap items-center gap-1">
+          <template v-for="(step, i) in chain" :key="step.key">
+            <Icon v-if="i" name="ph:caret-right" size="11" class="shrink-0 text-muted" />
+            <button
+              type="button"
+              class="focus-ring shrink-0 rounded-lg px-2 py-1 text-[12.5px] font-semibold transition-colors"
+              :class="step.active ? 'bg-soft text-ink' : 'text-muted hover:text-ink'"
+              @click="board.setView(scopeKey, step.view)"
+            >{{ step.label }}</button>
+          </template>
+        </nav>
+
         <SegmentedControl
-          :model-value="scope.cellSize"
-          :options="[{ value: 'compact', label: 'Компактно', icon: 'ph:grid-nine' }, { value: 'large', label: 'Крупно', icon: 'ph:squares-four' }]"
-          @update:model-value="board.setCellSize(scopeKey, $event as 'compact' | 'large')"
+          :model-value="scope.view" class="ml-auto shrink-0" :options="VIEWS"
+          @update:model-value="board.setView(scopeKey, $event as PickerView)"
         />
-        <p class="ml-auto hidden items-center gap-1.5 text-[11.5px] text-muted sm:flex">
-          <kbd class="hot">Ctrl</kbd>+клик — выделить,
-          <kbd class="hot">B</kbd> бронь, <kbd class="hot">D</kbd> договор, <kbd class="hot">C</kbd> сравнение
-        </p>
       </div>
 
-      <UnitBoardGrid
-        v-if="scope.view === 'board'"
-        :scope-key="scopeKey" :units="units" :match-ids="matchIds" :scores="scores" :tooltip="!miniId"
-        @open="onUnitClick"
-      />
-      <UnitFacadeView
-        v-else-if="scope.view === 'facade'"
-        :scope-key="scopeKey" :building="building" :units="units" :match-ids="matchIds" :scores="scores" :tooltip="!miniId"
-        :can-edit="canEdit"
-        @open="onUnitClick" @block="openFloorShowcase"
-      />
-      <UnitFloorPlanView
-        v-else-if="scope.view === 'floor'"
-        :scope-key="scopeKey" :building="building" :units="units" :match-ids="matchIds" :scores="scores" :tooltip="!miniId"
-        @open="openUnitShowcase"
-      />
-      <UnitListTable
-        v-else
-        :units="units" :dim-ids="new Set(units.filter((u) => !matchIds.has(u.id)).map((u) => u.id))"
-        :scope-key="scopeKey" :scores="scores"
-        @open="onUnitClick" @reserve="emit('reserve', $event)" @contract="emit('contract', $event)"
-      />
-    </template>
+      <!-- корпуса: на генплане не нужны, там дома выбирают прямо на плане -->
+      <div v-if="scope.view !== 'master' && buildings.length > 1" class="flex gap-1.5 overflow-x-auto">
+        <button
+          v-for="b in buildings" :key="b.id" type="button"
+          class="focus-ring flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border px-2.5 py-1.5 text-[12.5px] font-semibold transition-colors"
+          :class="scope.buildingId === b.id ? 'border-ink bg-ink text-panel' : 'border-line bg-panel text-muted hover:text-ink'"
+          @click="board.setBuilding(scopeKey, b.id)"
+        >
+          {{ b.name }}
+          <span
+            class="tabular rounded-full px-1.5 text-[10.5px]"
+            :class="scope.buildingId === b.id ? 'bg-panel/20' : 'bg-soft text-ink'"
+          >{{ buildingMatchCount(b.id) }}</span>
+        </button>
+      </div>
 
-    <EmptyState v-else icon="ph:building-apartment" title="В проекте нет домов" text="Выберите другой проект или добавьте дом" />
+      <!-- фильтры: липкие, чтобы не возвращаться к ним прокруткой -->
+      <div v-if="scope.view !== 'master'" ref="filterSentinel" class="h-px" />
+      <div
+        v-if="scope.view !== 'master'"
+        class="sticky top-[62px] z-20 -mx-1 rounded-card border px-2 py-2 transition-all duration-150"
+        :class="stuck ? 'border-line bg-panel/92 shadow-card backdrop-blur' : 'border-transparent bg-transparent'"
+      >
+        <UnitFilterBar v-model="filters" :units="units" :matched="matchIds.size" />
+      </div>
 
-    <UnitSelectionBar
-      :scope-key="scopeKey" :units="units" :can-edit="canEdit" :scores="scores"
-      :comparing="compareTray" :lead-id="leadId"
-      @compare="toggleCompare" @expand="openCompareFull"
-      @reserve="emit('reserve', $event)" @contract="emit('contract', $event)" @open="emit('open', $event)"
-    />
+      <!-- подбор под клиента -->
+      <div v-if="leadId && scope.view !== 'master'" class="flex flex-wrap items-center gap-2 rounded-xl2 bg-soft px-3 py-2">
+        <Icon name="ph:target" size="15" class="shrink-0 text-plum" />
+        <p class="min-w-0 flex-1 text-[12px] text-muted">
+          <template v-if="scoring">Проценты считаются по запросу клиента — клик по квартире откроет карточку с разбором.</template>
+          <template v-else>Заполните запрос клиента на вкладке «Обзор» — подбор начнёт считать совпадение.</template>
+        </p>
+        <AppButton size="sm" icon="ph:funnel" @click="applyInterest">Фильтр из запроса</AppButton>
+      </div>
 
-    <UnitMiniCard
-      v-if="miniId" :unit-id="miniId" :x="miniPos.x" :y="miniPos.y"
-      :score="scores?.get(miniId)" :lead-id="leadId"
-      :linked="linkedIds.includes(miniId)" :selected="scope.selected.includes(miniId)"
-      @close="closeMini"
-      @open="fromMini('open', $event)"
-      @reserve="fromMini('reserve', $event)"
-      @contract="fromMini('contract', $event)"
-      @link="fromMini('link', $event)"
-      @toggle-select="board.toggleSelect(scopeKey, $event)"
-    />
+      <!-- генплан -->
+      <UnitMasterPlanView
+        v-if="scope.view === 'master' && project"
+        :scope-key="scopeKey" :project="project" :buildings="buildings" :units="projectUnits"
+        @pick="pickBuilding" @board="boardBuilding"
+      />
+
+      <template v-else-if="building">
+        <div v-if="scope.view === 'board'" class="flex flex-wrap items-center gap-2">
+          <SegmentedControl
+            :model-value="scope.colorMode"
+            :options="[{ value: 'status', label: 'Статус', icon: 'ph:tag' }, { value: 'payment', label: 'Оплата', icon: 'ph:hand-coins' }]"
+            @update:model-value="board.setColorMode(scopeKey, $event as 'status' | 'payment')"
+          />
+          <SegmentedControl
+            :model-value="scope.cellSize"
+            :options="[{ value: 'compact', label: 'Компактно', icon: 'ph:grid-nine' }, { value: 'large', label: 'Крупно', icon: 'ph:squares-four' }]"
+            @update:model-value="board.setCellSize(scopeKey, $event as 'compact' | 'large')"
+          />
+          <p class="ml-auto hidden items-center gap-1.5 text-[11.5px] text-muted sm:flex">
+            <kbd class="hot">Ctrl</kbd>+клик — выделить,
+            <kbd class="hot">B</kbd> бронь, <kbd class="hot">D</kbd> договор, <kbd class="hot">C</kbd> сравнение
+          </p>
+        </div>
+
+        <UnitBoardGrid
+          v-if="scope.view === 'board'"
+          :scope-key="scopeKey" :units="units" :match-ids="matchIds" :scores="scores" :tooltip="!miniId"
+          @open="onUnitClick"
+        />
+        <UnitFacadeView
+          v-else-if="scope.view === 'facade'"
+          :scope-key="scopeKey" :building="building" :units="units" :match-ids="matchIds" :scores="scores" :tooltip="!miniId"
+          :can-edit="canEdit"
+          @open="onUnitClick" @block="openFloorShowcase"
+        />
+        <UnitFloorPlanView
+          v-else-if="scope.view === 'floor'"
+          :scope-key="scopeKey" :building="building" :units="units" :match-ids="matchIds" :scores="scores" :tooltip="!miniId"
+          @open="openUnitShowcase"
+        />
+        <UnitListTable
+          v-else
+          :units="units" :dim-ids="new Set(units.filter((u) => !matchIds.has(u.id)).map((u) => u.id))"
+          :scope-key="scopeKey" :scores="scores"
+          @open="onUnitClick" @reserve="emit('reserve', $event)" @contract="emit('contract', $event)"
+        />
+      </template>
+
+      <EmptyState v-else icon="ph:building-apartment" title="В проекте нет домов" text="Выберите другой проект или добавьте дом" />
+
+      <UnitSelectionBar
+        :scope-key="scopeKey" :units="units" :can-edit="canEdit" :scores="scores"
+        :comparing="compareTray" :lead-id="leadId"
+        @compare="toggleCompare" @expand="openCompareFull"
+        @reserve="emit('reserve', $event)" @contract="emit('contract', $event)" @open="emit('open', $event)"
+      />
+
+      <UnitMiniCard
+        v-if="miniId" :unit-id="miniId" :x="miniPos.x" :y="miniPos.y"
+        :score="scores?.get(miniId)" :lead-id="leadId"
+        :linked="linkedIds.includes(miniId)" :selected="scope.selected.includes(miniId)"
+        @close="closeMini"
+        @open="fromMini('open', $event)"
+        @reserve="fromMini('reserve', $event)"
+        @contract="fromMini('contract', $event)"
+        @link="fromMini('link', $event)"
+        @toggle-select="board.toggleSelect(scopeKey, $event)"
+      />
+    </div>
 
     <UnitShowcasePanel
       v-if="showcase && building"
-      :building="building" :units="units" :scope-key="scopeKey"
+      :building="building" :units="units" :scope-key="scopeKey" :docked="docked"
       :floor="showcase.floor" :section="showcase.section" :unit-id="showcase.unitId"
       :project-name="project?.name"
       @close="showcase = null"
       @update:floor="showcase = { ...showcase, floor: $event, unitId: null }"
       @update:unit="showcase = { ...showcase, unitId: $event }"
       @open-plan="showFloorPlan"
-      @open="emit('open', $event)"
+      @open="openFullCard"
       @reserve="emit('reserve', $event)"
     />
 

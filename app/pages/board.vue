@@ -83,10 +83,12 @@ const expiring = computed(() => salesStore.activeReservations
       </PageHeader>
 
       <UnitPicker
+        docked
         :scope-key="SCOPE" :project-id="projectId" :can-edit="can('unit.editStatus')"
         @open="activeUnitId = $event"
         @reserve="activeUnitId = $event"
         @contract="goContract"
+        @close-card="activeUnitId = null"
       />
     </div>
 
