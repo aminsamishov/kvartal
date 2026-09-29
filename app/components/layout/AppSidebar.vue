@@ -42,8 +42,8 @@ const ACCENT: Record<NavAccent, string> = {
     :class="[ui.sidebarCollapsed ? 'w-[76px]' : 'w-[248px]', ui.mobileNavOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0']"
   >
     <div class="flex h-16 shrink-0 items-center gap-2.5 px-4">
-      <div class="grid h-9 w-9 shrink-0 place-items-center rounded-xl2 bg-fill-plum font-disp text-[15px] font-bold text-white">K</div>
-      <span v-if="!ui.sidebarCollapsed" class="font-disp text-[16px] font-semibold text-white">Kvartal</span>
+      <div class="grid h-9 w-9 shrink-0 place-items-center rounded-xl2 bg-fill-plum font-disp text-[15px] font-bold text-white">IH</div>
+      <span v-if="!ui.sidebarCollapsed" class="font-disp text-[16px] font-semibold text-white">InHouse</span>
     </div>
 
     <nav class="flex-1 space-y-4 px-2.5 pb-4">

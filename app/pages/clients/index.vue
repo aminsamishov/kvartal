@@ -26,7 +26,7 @@ const visible = computed(() => profiles.value.filter((p) => matchesClientFilters
 /* -------------------------------- колонки -------------------------------- */
 
 const DEFAULT_COLUMNS: ClientColumnKey[] = CLIENT_COLUMNS.map((c) => c.key)
-const COLUMNS_KEY = 'kvartal:clients:columns'
+const COLUMNS_KEY = 'inhouse:clients:columns'
 
 const visibleKeys = ref<ClientColumnKey[]>([...DEFAULT_COLUMNS])
 const columnsOpen = ref(false)

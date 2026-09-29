@@ -26,9 +26,9 @@ async function submitCode() {
 <template>
   <div class="relative z-10 w-full max-w-[400px]">
     <div class="mb-7 flex flex-col items-center gap-3 text-center">
-      <div class="grid h-14 w-14 place-items-center rounded-2xl bg-fill-plum font-disp text-2xl font-bold text-white shadow-panel">K</div>
+      <div class="grid h-14 w-14 place-items-center rounded-2xl bg-fill-plum font-disp text-2xl font-bold text-white shadow-panel">IH</div>
       <div>
-        <h1 class="font-disp text-[22px] font-semibold text-white">Kvartal</h1>
+        <h1 class="font-disp text-[22px] font-semibold text-white">InHouse</h1>
         <p class="text-[13px] text-side-ink">Платформа продаж и рассрочек застройщика</p>
       </div>
     </div>
@@ -72,6 +72,6 @@ async function submitCode() {
       </template>
     </div>
 
-    <p class="mt-5 text-center text-[12px] text-side-ink">© 2026 Kvartal — внутренняя платформа продаж</p>
+    <p class="mt-5 text-center text-[12px] text-side-ink">© 2026 InHouse — платформа продаж застройщика</p>
   </div>
 </template>

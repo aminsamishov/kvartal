@@ -1,7 +1,7 @@
 import type { PickerScope } from '~/stores/board'
 import { emptyUnitFilters } from '~/utils/unitFilters'
 
-const KEY_PREFIX = 'kvartal:picker:'
+const KEY_PREFIX = 'inhouse:picker:'
 /** Версия формата: при изменении полей старые настройки просто игнорируются. */
 const VERSION = 1
 

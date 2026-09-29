@@ -42,7 +42,7 @@ export const PROJECTS: Project[] = [
     id: 'aurora', name: 'ЖК «Аврора»', propertyKind: 'residential', address: 'ул. Ахунбаева, 2', developer: 'ОсОО «Кварталстрой»',
     banks: ['Доскредобанк', 'РСК Банк'], currency: 'USD', country: 'Кыргызстан', stage: 'Строительство', salesStart: '2025-11-01',
     infrastructure: 'Детский сад, паркинг, двор без машин, коммерция на 1 этаже',
-    website: 'https://aurora.kvartal.kg', salesOfficeId: 'office-2',
+    website: 'https://aurora.inhouse.kg', salesOfficeId: 'office-2',
     buildingIds: ['aurora-1', 'aurora-2'], accent: '#6E4453', archived: false, media: [], masterPlans: [], masterPlanZones: [],
   },
   {

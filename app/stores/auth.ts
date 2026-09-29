@@ -3,7 +3,10 @@ import * as authRepo from '~/repositories/auth'
 import { clone } from '~/repositories/api'
 import type { AppUser } from '~/types/models'
 
-const STORAGE_KEY = 'kvartal.session'
+const STORAGE_KEY = 'inhouse.session'
+// ключ переехал вместе с названием; старый читаем один раз, чтобы
+// продукт не разлогинил всех на ровном месте
+const LEGACY_KEY = 'kvartal.session'
 
 export const useAuthStore = defineStore('auth', {
   state: () => ({
@@ -25,8 +28,12 @@ export const useAuthStore = defineStore('auth', {
       this.restored = true
       if (!import.meta.client) return
       try {
-        const raw = localStorage.getItem(STORAGE_KEY)
-        if (raw) this.user = JSON.parse(raw)
+        const raw = localStorage.getItem(STORAGE_KEY) ?? localStorage.getItem(LEGACY_KEY)
+        if (!raw) return
+        this.user = JSON.parse(raw)
+        // переносим сессию на новый ключ, чтобы старый больше не читался
+        localStorage.setItem(STORAGE_KEY, raw)
+        localStorage.removeItem(LEGACY_KEY)
       } catch {
         // игнорируем повреждённую сессию
       }

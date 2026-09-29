@@ -47,7 +47,7 @@ export default defineNuxtConfig({
 
   app: {
     head: {
-      title: 'Kvartal — платформа продаж застройщика',
+      title: 'InHouse — платформа продаж застройщика',
       htmlAttrs: { lang: 'ru' },
       meta: [
         { charset: 'utf-8' },

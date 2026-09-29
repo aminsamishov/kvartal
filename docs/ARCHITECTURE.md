@@ -1,4 +1,4 @@
-# Kvartal CRM — техническая и продуктовая документация
+# InHouse CRM — техническая и продуктовая документация
 
 > Документ описывает систему **по состоянию кодовой базы** на коммите `0fa8abe`
 > (ветка `claude/charming-shannon-w89yov`, 24 коммита, ~26 400 строк в `app/`).
@@ -34,7 +34,7 @@
 
 ## 1.1 Что это за продукт
 
-**Kvartal** — CRM для отдела продаж застройщика. Не универсальная CRM с полями
+**InHouse** — CRM для отдела продаж застройщика. Не универсальная CRM с полями
 «сделка/контакт», а система, в центре которой стоит **фонд недвижимости**:
 проект (ЖК) → дом → помещение, и всё остальное — заявки, брони, договоры,
 платежи, документы — навешено на конкретную квартиру.
@@ -48,7 +48,7 @@
 
 ## 1.2 Для кого
 
-| Роль на рынке | Что закрывает Kvartal |
+| Роль на рынке | Что закрывает InHouse |
 |---|---|
 | Застройщик (1–N ЖК) | единый фонд, шахматка, прайс, статусы помещений |
 | Отдел продаж | воронка заявок, подбор, брони, мастер сделок, календарь дня |
@@ -77,7 +77,7 @@
 
 ## 1.4 Чем отличается от обычной CRM
 
-| Обычная CRM | Kvartal |
+| Обычная CRM | InHouse |
 |---|---|
 | Сделка — абстрактная сумма | Сделка привязана к конкретному помещению фонда |
 | Каталог объектов — справочник | Фонд — интерактивная шахматка, фасад, генплан, план этажа с разметкой областей |
@@ -202,11 +202,11 @@ flowchart TD
 | Что | Где живёт | Переживает F5 |
 |---|---|---|
 | Проекты, дома, помещения, заявки, договоры… | Pinia + модульные константы сида | ❌ (пересоздаётся сид) |
-| Сессия пользователя | `localStorage: kvartal.session` | ✅ |
-| Тема оформления | `localStorage: kvartal.theme` | ✅ |
-| Фильтры/вид подбора по менеджеру | `localStorage: kvartal:picker:<userId>` | ✅ |
-| Набор колонок реестра клиентов | `localStorage: kvartal:clients:columns` | ✅ |
-| Ширины колонок таблиц | `localStorage: kvartal:cols:<table>` | ✅ |
+| Сессия пользователя | `localStorage: inhouse.session` | ✅ |
+| Тема оформления | `localStorage: inhouse.theme` | ✅ |
+| Фильтры/вид подбора по менеджеру | `localStorage: inhouse:picker:<userId>` | ✅ |
+| Набор колонок реестра клиентов | `localStorage: inhouse:clients:columns` | ✅ |
+| Ширины колонок таблиц | `localStorage: inhouse:cols:<table>` | ✅ |
 | Правила автоматизаций, журнал срабатываний | Pinia (`automations`) | ❌ |
 | Загруженные файлы | `URL.createObjectURL` (blob) | ❌ |
 
@@ -224,7 +224,7 @@ flowchart TD
 ## 3.1 Дерево (сокращённое, с объёмами)
 
 ```
-kvartal/
+inhouse/
 ├── nuxt.config.ts              конфиг SPA, автоимпорт компонентов, иконки
 ├── tailwind.config.ts          токены → утилиты Tailwind (функция v() + color-mix)
 ├── package.json                10 прод-зависимостей, 2 dev
@@ -1291,7 +1291,7 @@ actions `load`, `log(module, text, author)`, `generateDocument(input)`,
 State `user`, `phoneInput`, `step` (`phone|code`), `demoCode`, `loading`,
 `error`, `restored`; getters `isAuthed`, `roleLabel`; actions `restore`,
 `sendCode`, `confirmCode`, `backToPhone`, `loginAsDemo` (**заглушка**),
-`logout`. Сессия хранится в `localStorage.kvartal.session`.
+`logout`. Сессия хранится в `localStorage.inhouse.session`.
 
 ## 8.12 `ui` (35) — интерфейсное состояние
 
@@ -1723,7 +1723,7 @@ flowchart TD
 
 Сохранение (`usePickerPersistence`): `view`, `filters`, `buildingId`,
 `colorMode`, `cellSize`, `facadeMode` пишутся в
-`localStorage: kvartal:picker:<userId>`; скоупы `lead:*` и `contract:*` **не
+`localStorage: inhouse:picker:<userId>`; скоупы `lead:*` и `contract:*` **не
 сохраняются** — вчерашний подбор чужого клиента не должен всплывать.
 
 ## 12.3 Фильтр (`utils/unitFilters.ts`)

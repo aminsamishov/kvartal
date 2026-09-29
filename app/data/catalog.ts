@@ -23,17 +23,17 @@ export const SALES_OFFICES: SalesOffice[] = [
 ]
 
 export const USERS: AppUser[] = [
-  { id: 'u-director', name: 'Тимур Асанов', role: 'director', email: 'asanov@kvartal.kg', phone: '996700100100', projectIds: ['aurora', 'panorama'], active: true, avatarColor: '#6E4453' },
-  { id: 'u-comdir', name: 'Гульнара Молдалиева', role: 'commercial_director', email: 'moldalieva@kvartal.kg', phone: '996700100101', projectIds: ['aurora', 'panorama'], active: true, avatarColor: '#2F7D5C' },
-  { id: 'u-findir', name: 'Игорь Кузнецов', role: 'finance_director', email: 'kuznetsov@kvartal.kg', phone: '996700100102', projectIds: ['aurora', 'panorama'], active: true, avatarColor: '#3A6EA5' },
-  { id: 'u-mgr-1', name: 'Айгуль Осмонова', role: 'manager', email: 'osmonova@kvartal.kg', phone: '996700100110', projectIds: ['aurora'], active: true, avatarColor: '#B8780E' },
-  { id: 'u-mgr-2', name: 'Данияр Токтогулов', role: 'manager', email: 'toktogulov@kvartal.kg', phone: '996700100111', projectIds: ['aurora', 'panorama'], active: true, avatarColor: '#A77886' },
-  { id: 'u-mgr-3', name: 'Дана Абдыкадырова', role: 'manager', email: 'abdykadyrova@kvartal.kg', phone: '996700100112', projectIds: ['panorama'], active: true, avatarColor: '#34495A' },
-  { id: 'u-care', name: 'Виктория Сыдыкова', role: 'care_manager', email: 'sydykova@kvartal.kg', phone: '996700100120', projectIds: ['aurora', 'panorama'], active: true, avatarColor: '#B93A2F' },
-  { id: 'u-acc', name: 'Елена Волкова', role: 'accountant', email: 'volkova@kvartal.kg', phone: '996700100130', projectIds: ['aurora', 'panorama'], active: true, avatarColor: '#2F7D5C' },
-  { id: 'u-cashier', name: 'Салтанат Джумабекова', role: 'cashier', email: 'jumabekova@kvartal.kg', phone: '996700100131', projectIds: ['aurora', 'panorama'], active: true, avatarColor: '#6E4453' },
-  { id: 'u-lawyer', name: 'Марат Бекболотов', role: 'lawyer', email: 'bekbolotov@kvartal.kg', phone: '996700100140', projectIds: ['aurora', 'panorama'], active: true, avatarColor: '#3A6EA5' },
-  { id: 'u-controller', name: 'Асель Орозова', role: 'controller', email: 'orozova@kvartal.kg', phone: '996700100141', projectIds: ['aurora', 'panorama'], active: true, avatarColor: '#B8780E' },
+  { id: 'u-director', name: 'Тимур Асанов', role: 'director', email: 'asanov@inhouse.kg', phone: '996700100100', projectIds: ['aurora', 'panorama'], active: true, avatarColor: '#6E4453' },
+  { id: 'u-comdir', name: 'Гульнара Молдалиева', role: 'commercial_director', email: 'moldalieva@inhouse.kg', phone: '996700100101', projectIds: ['aurora', 'panorama'], active: true, avatarColor: '#2F7D5C' },
+  { id: 'u-findir', name: 'Игорь Кузнецов', role: 'finance_director', email: 'kuznetsov@inhouse.kg', phone: '996700100102', projectIds: ['aurora', 'panorama'], active: true, avatarColor: '#3A6EA5' },
+  { id: 'u-mgr-1', name: 'Айгуль Осмонова', role: 'manager', email: 'osmonova@inhouse.kg', phone: '996700100110', projectIds: ['aurora'], active: true, avatarColor: '#B8780E' },
+  { id: 'u-mgr-2', name: 'Данияр Токтогулов', role: 'manager', email: 'toktogulov@inhouse.kg', phone: '996700100111', projectIds: ['aurora', 'panorama'], active: true, avatarColor: '#A77886' },
+  { id: 'u-mgr-3', name: 'Дана Абдыкадырова', role: 'manager', email: 'abdykadyrova@inhouse.kg', phone: '996700100112', projectIds: ['panorama'], active: true, avatarColor: '#34495A' },
+  { id: 'u-care', name: 'Виктория Сыдыкова', role: 'care_manager', email: 'sydykova@inhouse.kg', phone: '996700100120', projectIds: ['aurora', 'panorama'], active: true, avatarColor: '#B93A2F' },
+  { id: 'u-acc', name: 'Елена Волкова', role: 'accountant', email: 'volkova@inhouse.kg', phone: '996700100130', projectIds: ['aurora', 'panorama'], active: true, avatarColor: '#2F7D5C' },
+  { id: 'u-cashier', name: 'Салтанат Джумабекова', role: 'cashier', email: 'jumabekova@inhouse.kg', phone: '996700100131', projectIds: ['aurora', 'panorama'], active: true, avatarColor: '#6E4453' },
+  { id: 'u-lawyer', name: 'Марат Бекболотов', role: 'lawyer', email: 'bekbolotov@inhouse.kg', phone: '996700100140', projectIds: ['aurora', 'panorama'], active: true, avatarColor: '#3A6EA5' },
+  { id: 'u-controller', name: 'Асель Орозова', role: 'controller', email: 'orozova@inhouse.kg', phone: '996700100141', projectIds: ['aurora', 'panorama'], active: true, avatarColor: '#B8780E' },
   { id: 'u-agent-1', name: 'Нурбек Токтосунов', role: 'agent', email: 'agent1@partner.kg', phone: '996700100150', projectIds: ['aurora'], active: true, avatarColor: '#8A8A8A' },
 ]
 

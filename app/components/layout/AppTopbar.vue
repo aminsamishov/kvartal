@@ -39,7 +39,7 @@ function setTheme(t: 'light' | 'dark' | 'system') {
   theme.value = t
   if (import.meta.client) {
     document.documentElement.dataset.theme = t === 'system' ? '' : t
-    localStorage.setItem('kvartal.theme', t)
+    localStorage.setItem('inhouse.theme', t)
   }
 }
 

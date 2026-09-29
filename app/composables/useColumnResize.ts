@@ -9,7 +9,7 @@ export function useColumnResize(storageKey: string, defaults: Record<string, num
   const widths = ref<Record<string, number>>({ ...defaults })
   const active = ref<string | null>(null)
 
-  const key = `kvartal:cols:${storageKey}`
+  const key = `inhouse:cols:${storageKey}`
 
   onMounted(() => {
     try {

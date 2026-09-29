@@ -20,7 +20,7 @@ const printedAt = new Date().toISOString()
   <section class="print-root">
     <header class="print-head">
       <div>
-        <p class="print-eyebrow">Kvartal · досье покупателя</p>
+        <p class="print-eyebrow">InHouse · досье покупателя</p>
         <h1 class="print-title">{{ profile.client.name }}</h1>
         <p class="print-sub">
           {{ CLIENT_STATUS_META[profile.status].label }}
