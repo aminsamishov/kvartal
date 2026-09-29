@@ -9,6 +9,7 @@ import { UNIT_BOARD_COLOR } from '~/utils/meta'
 import { AVENUE88_PRESETS, AV88_FIRST_LIVING, AV88_TOP, avenue88Units } from './avenue88'
 import { AGENT_NAMES, FIRST_NAMES_F, FIRST_NAMES_M, LAST_NAMES_F, LAST_NAMES_M, LEAD_SOURCES } from './names'
 import { documentImage, facadeFloorBand, facadeImage, floorPlanImage, floorPlateApartments, masterPlanFootprint, masterPlanImage, unitLayoutImage, unitLayoutRects } from './placeholders'
+import { AINI_FIRST_LIVING, AINI_FLOORS, ainiFloorImage, ainiPresets, ainiRender, ainiUnits } from './aini'
 
 /**
  * «Сегодня» демо-данных. Внутри дня дата фиксирована — графики и просрочки не
@@ -52,6 +53,23 @@ export const PROJECTS: Project[] = [
     infrastructure: 'Подземный паркинг, коммерция на 1 этаже',
     website: '', salesOfficeId: 'office-1',
     buildingIds: ['panorama-1'], accent: '#3A6EA5', archived: false, media: [], masterPlans: [], masterPlanZones: [],
+  },
+  // Настоящий объект целиком: рендеры, поэтажные планы, планировки квартир и
+  // экспликации взяты из буклета застройщика. Площади комнат сходятся с
+  // документом до сотых — на выдуманных планировках не проверить, работает ли
+  // разметка комнат на том, что реально приходит с объекта.
+  {
+    id: 'aini', name: 'ЖК «Айни Ороз»', propertyKind: 'residential', address: 'ул. Айни, Бишкек',
+    developer: '', banks: [], currency: 'USD', country: 'Кыргызстан', stage: 'Строительство', salesStart: '',
+    infrastructure: 'Подземный паркинг, коммерция на 1–2 этажах, закрытый двор, детская площадка',
+    website: '', salesOfficeId: 'office-1',
+    buildingIds: ['aini-1'], accent: '#8C5566', archived: false,
+    // вся подборка рендеров застройщика — из неё менеджер собирает презентацию
+    media: Array.from({ length: 42 }, (_, i) => ({
+      id: `aini-m${i + 1}`, url: ainiRender(i + 1), name: `Визуализация ${i + 1}`,
+      kind: 'photo' as const, addedAt: '2026-01-15T09:00:00.000Z',
+    })),
+    masterPlans: [], masterPlanZones: [],
   },
   // Настоящий объект: фонд, планировки и площади перенесены из рабочих
   // чертежей. Пустые поля — те, которых в буклетах нет; их заполняет
@@ -135,6 +153,34 @@ function seedFacadeZones(buildingId: string, floors: number, upTo = floors): Ima
 }
 
 export const BUILDINGS: Building[] = [
+  {
+    id: 'aini-1', projectId: 'aini', name: 'Дом 1', defaultUnitKind: 'apartment', structureType: 'residential',
+    constructionStage: 'facade', address: 'ул. Айни, Бишкек', contractAddress: '',
+    finishing: 'Черновая', material: 'Монолит-кирпич', cadastralNumber: '',
+    constructionStart: '', constructionEnd: '', deliveryDate: '',
+    salesStart: '', salesEnd: '',
+    elevatorsPassenger: 2, elevatorsFreight: 1, hasTrashChute: true, hasShowroom: true,
+    slogan: 'Ловите свой момент жизни', salesOfficeId: 'office-1',
+    sections: 3, floors: AINI_FLOORS, floorsBelow: 1, archived: false, badge: 'Идут продажи',
+    pdfImageUrl: ainiRender(1),
+    // Рендеры перспективные, поэтому полос по этажам на них нет: разметку
+    // рисует менеджер в редакторе фасадов поверх нужного вида.
+    facades: [
+      { id: 'aini-fac-main', name: 'Главный фасад с площади', imageUrl: ainiRender(1), tag: 'street', published: true, zones: [] },
+      { id: 'aini-fac-entry', name: 'Входная группа и коммерция', imageUrl: ainiRender(15), tag: 'street', published: true, zones: [] },
+      { id: 'aini-fac-winter', name: 'Зимний вид', imageUrl: ainiRender(20), tag: 'street', published: true, zones: [] },
+      { id: 'aini-fac-yard', name: 'Вид со двора', imageUrl: ainiRender(2), tag: 'yard', published: false, zones: [] },
+    ],
+    facadeMarks: [],
+    unitTypePresets: ainiPresets(),
+    // Планы этажей застройщик даёт тремя листами — по ярусам 3, 4–7 и 8–14.
+    // Каждому жилому этажу отдаём лист его яруса, а не рисуем несуществующие.
+    floorPlans: Array.from({ length: AINI_FLOORS - AINI_FIRST_LIVING + 1 }, (_, i) => {
+      const floor = AINI_FIRST_LIVING + i
+      return { floor, name: `Этаж ${floor}`, imageUrl: ainiFloorImage(floor), zones: [] }
+    }),
+    fill: { board: true, layouts: true, floorPlans: true, facades: true, masterPlan: false },
+  },
   {
     id: 'aurora-1', projectId: 'aurora', name: 'Дом 1', defaultUnitKind: 'apartment', structureType: 'residential',
     constructionStage: 'facade', address: 'ул. Ахунбаева, 2', contractAddress: 'ул. Ахунбаева, 2, кадастровый квартал 01-05',
@@ -305,6 +351,12 @@ function build() {
     const project = PROJECTS.find((p) => p.id === b.projectId)!
     // Avenue 88 — настоящий объект: фонд собирается по плану этажа, а не
     // случайным генератором демо-домов
+    // «Айни Ороз» — настоящий объект: фонд собирается по поэтажным планам
+    // застройщика, а не случайным генератором демо-домов
+    if (b.id === 'aini-1') {
+      units.push(...ainiUnits({ buildingId: b.id, projectId: b.projectId }))
+      continue
+    }
     if (b.id === 'avenue88-1') {
       const real = avenue88Units({
         buildingId: b.id, projectId: b.projectId, sold: AV88_SOLD,
