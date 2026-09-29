@@ -6,6 +6,7 @@ import type {
 import { makeRng, rBool, rInt, rPick, rWeighted, type Rng } from '~/utils/rng'
 import { defaultExplication, roomColor } from '~/utils/explication'
 import { UNIT_BOARD_COLOR } from '~/utils/meta'
+import { AVENUE88_PRESETS, AV88_FIRST_LIVING, AV88_TOP, avenue88Units } from './avenue88'
 import { AGENT_NAMES, FIRST_NAMES_F, FIRST_NAMES_M, LAST_NAMES_F, LAST_NAMES_M, LEAD_SOURCES } from './names'
 import { documentImage, facadeFloorBand, facadeImage, floorPlanImage, floorPlateApartments, masterPlanFootprint, masterPlanImage, unitLayoutImage, unitLayoutRects } from './placeholders'
 
@@ -51,6 +52,16 @@ export const PROJECTS: Project[] = [
     infrastructure: 'Подземный паркинг, коммерция на 1 этаже',
     website: '', salesOfficeId: 'office-1',
     buildingIds: ['panorama-1'], accent: '#3A6EA5', archived: false, media: [], masterPlans: [], masterPlanZones: [],
+  },
+  // Настоящий объект: фонд, планировки и площади перенесены из рабочих
+  // чертежей. Пустые поля — те, которых в буклетах нет; их заполняет
+  // застройщик, а не мы.
+  {
+    id: 'avenue88', name: 'ЖК Avenue 88', propertyKind: 'residential', address: '', developer: '',
+    banks: [], currency: 'USD', country: 'Кыргызстан', stage: 'Строительство', salesStart: '',
+    infrastructure: 'Двухуровневый подземный паркинг, коммерция на 1–2 этажах',
+    website: '', salesOfficeId: 'office-1',
+    buildingIds: ['avenue88-1'], accent: '#2F7D5C', archived: false, media: [], masterPlans: [], masterPlanZones: [],
   },
 ]
 
@@ -178,11 +189,35 @@ export const BUILDINGS: Building[] = [
     unitTypePresets: [], floorPlans: [],
     fill: { board: true, layouts: false, floorPlans: false, facades: false, masterPlan: true },
   },
+  {
+    id: 'avenue88-1', projectId: 'avenue88', name: 'Дом 1', defaultUnitKind: 'apartment', structureType: 'residential',
+    constructionStage: 'frame', address: '', contractAddress: '',
+    finishing: 'Черновая', material: '', cadastralNumber: '',
+    constructionStart: '', constructionEnd: '', deliveryDate: '',
+    salesStart: '', salesEnd: '',
+    elevatorsPassenger: 2, elevatorsFreight: 1, hasTrashChute: false, hasShowroom: false,
+    slogan: '', salesOfficeId: 'office-1',
+    // блоки А, Б, В из чертежей — это три подъезда; 1–2 этажи коммерция,
+    // квартиры с третьего по одиннадцатый, паркинг на двух уровнях вниз
+    sections: 3, floors: AV88_TOP, floorsBelow: 2, archived: false, badge: 'Идут продажи', pdfImageUrl: null,
+    facades: [], facadeMarks: [],
+    unitTypePresets: AVENUE88_PRESETS,
+    floorPlans: Array.from({ length: AV88_TOP - AV88_FIRST_LIVING + 1 }, (_, i) => ({
+      floor: AV88_FIRST_LIVING + i, name: `Этаж ${AV88_FIRST_LIVING + i}`, imageUrl: null, zones: [],
+    })),
+    fill: { board: true, layouts: false, floorPlans: false, facades: false, masterPlan: false },
+  },
 ]
 
 const LEAD_STAGE_LABEL: Record<LeadStage, string> = {
   new: 'Новая', contacted: 'Связались', visit: 'Показ', reserved: 'Бронь', deal: 'Сделка', lost: 'Отказ',
 }
+
+/**
+ * Продано десять квартир — столько назвал застройщик. Разброс по этажам и
+ * блокам обычный для старта: первыми уходят однушки блока В и средние этажи.
+ */
+const AV88_SOLD = ['310', '311', '312', '410', '411', '501', '502', '605', '710', '813']
 
 const ROOM_AREA: Record<number, [number, number]> = { 1: [38, 48], 2: [56, 70], 3: [78, 96], 4: [102, 124] }
 const BASE_PRICE_M2: Record<string, number> = { aurora: 620, panorama: 540 }
@@ -268,6 +303,16 @@ function build() {
   const units: Unit[] = []
   for (const b of BUILDINGS) {
     const project = PROJECTS.find((p) => p.id === b.projectId)!
+    // Avenue 88 — настоящий объект: фонд собирается по плану этажа, а не
+    // случайным генератором демо-домов
+    if (b.id === 'avenue88-1') {
+      const real = avenue88Units({
+        buildingId: b.id, projectId: b.projectId, sold: AV88_SOLD,
+        parkingPerLevel: 60, commercialPerFloor: 6,
+      })
+      units.push(...real)
+      continue
+    }
     const buildingUnits = genApartmentUnits(rng, b, project)
     // связываем помещения с планировкой по числу комнат — как в Profitbase,
     // где картинка планировки привязана к конкретному списку помещений
